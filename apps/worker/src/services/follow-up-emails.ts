@@ -189,6 +189,7 @@ async function sendAndRecord(
 
 	if (process.env.EMAIL_FOLLOW_UPS === "true") {
 		await sendFollowUpEmail({ to: recipientEmail, subject, text });
+		await new Promise((resolve) => setTimeout(resolve, 1000));
 	} else {
 		logger.info("Follow-up email (dry run)", {
 			kind: "email_follow_up",
