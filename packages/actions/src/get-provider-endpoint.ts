@@ -96,15 +96,18 @@ export function getProviderEndpoint(
 			case "novita":
 				url = "https://api.novita.ai/v3/openai";
 				break;
+			case "tuzi":
+				url = "https://api.tu-zi.com";
+				break;
 			case "moonshot":
 				url = "https://api.moonshot.ai";
 				break;
 			case "alibaba":
 				// Use different base URL for image generation vs chat completions
 				if (imageGenerations) {
-					url = "https://dashscope-intl.aliyuncs.com";
+					url = "https://dashscope.aliyuncs.com";
 				} else {
-					url = "https://dashscope-intl.aliyuncs.com/compatible-mode";
+					url = "https://dashscope.aliyuncs.com/compatible-mode";
 				}
 				break;
 			case "nebius":
@@ -117,7 +120,7 @@ export function getProviderEndpoint(
 				url = "https://nano-gpt.com/api";
 				break;
 			case "bytedance":
-				url = "https://ark.ap-southeast.bytepluses.com/api/v3";
+				url = "https://ark.cn-beijing.volces.com/api/v3";
 				break;
 			case "minimax":
 				url = "https://api.minimax.io";
@@ -207,24 +210,24 @@ export function getProviderEndpoint(
 			) {
 				baseEndpoint = `${url}/v1/publishers/google/models/${model}:${endpoint}`;
 			} else {
-				const projectId = getProviderEnvValue(
-					"google-vertex",
-					"project",
-					configIndex,
-				);
+				const projectId =
+					providerKeyOptions?.google_vertex_project ??
+					getProviderEnvValue("google-vertex", "project", configIndex);
 
 				const region =
+					providerKeyOptions?.google_vertex_region ??
 					getProviderEnvValue(
 						"google-vertex",
 						"region",
 						configIndex,
 						"global",
-					) ?? "global";
+					) ??
+					"global";
 
 				if (!projectId) {
 					const vertexEnv = getProviderEnvConfig("google-vertex");
 					throw new Error(
-						`${vertexEnv?.required.project ?? "LLM_GOOGLE_CLOUD_PROJECT"} environment variable is required for Vertex model "${model}"`,
+						`${vertexEnv?.required.project ?? "LLM_GOOGLE_CLOUD_PROJECT"} is required for Vertex model "${model}" (set via provider options or environment variable)`,
 					);
 				}
 
@@ -356,6 +359,7 @@ export function getProviderEndpoint(
 			return `${url}/v1/chat/completions`;
 		case "inference.net":
 		case "llmgateway":
+		case "tuzi":
 		case "groq":
 		case "cerebras":
 		case "deepseek":

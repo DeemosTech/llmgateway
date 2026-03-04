@@ -29,6 +29,11 @@ export interface ProviderDefinition {
 	// Priority weight for routing (default: 1). Lower values deprioritize the provider.
 	// e.g., 0.8 means 20% lower priority (score multiplied by 1/0.8 = 1.25)
 	priority?: number;
+	// Whether to use a proxy for requests to this provider by default
+	// If not specified, defaults to false
+	proxy?: boolean;
+	// Whether to hide the provider from the organization's provider keys UI
+	hidden?: boolean;
 }
 
 export const providers = [
@@ -132,6 +137,7 @@ export const providers = [
 		color: "#1a1a1a",
 		website: null,
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "groq",
@@ -147,6 +153,7 @@ export const providers = [
 		color: "#F55036",
 		website: "https://groq.com",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "cerebras",
@@ -163,6 +170,7 @@ export const providers = [
 		color: "#6b46c1",
 		website: "https://cerebras.ai",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "xai",
@@ -180,6 +188,21 @@ export const providers = [
 		announcement: null,
 	},
 	{
+		id: "tuzi",
+		name: "Tu-Zi",
+		description: "Tu-Zi API Gateway",
+		env: {
+			required: {
+				apiKey: "LLM_TU-ZI_API_KEY",
+			},
+		},
+		streaming: true,
+		cancellation: true,
+		color: "#000000",
+		website: "https://api.tu-zi.com",
+		announcement: null,
+	},
+	{
 		id: "deepseek",
 		name: "DeepSeek",
 		description:
@@ -194,6 +217,7 @@ export const providers = [
 		color: "#FF6B00",
 		website: "https://deepseek.com",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "alibaba",
@@ -225,6 +249,7 @@ export const providers = [
 		color: "#9333ea",
 		website: "https://novita.ai",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "aws-bedrock",
@@ -288,6 +313,7 @@ export const providers = [
 		color: "#22c55e",
 		website: "https://z.ai",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "moonshot",
@@ -319,6 +345,7 @@ export const providers = [
 		color: "#20B2AA",
 		website: "https://perplexity.ai",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "nebius",
@@ -335,6 +362,7 @@ export const providers = [
 		color: "#3b82f6",
 		website: "https://nebius.com",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "mistral",
@@ -350,6 +378,7 @@ export const providers = [
 		color: "#FF7000",
 		website: "https://mistral.ai",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "canopywave",
@@ -366,6 +395,7 @@ export const providers = [
 		color: "#10b981",
 		website: "https://canopywave.io",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "inference.net",
@@ -382,6 +412,7 @@ export const providers = [
 		color: "#10b981",
 		website: "https://inference.net",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "together.ai",
@@ -398,19 +429,7 @@ export const providers = [
 		color: "#ff6b35",
 		website: "https://together.ai",
 		announcement: null,
-	},
-	{
-		id: "custom",
-		name: "Custom",
-		description: "Custom OpenAI-compatible provider with configurable base URL",
-		env: {
-			required: {},
-		},
-		streaming: true,
-		cancellation: true,
-		color: "#6b7280",
-		website: null,
-		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "nanogpt",
@@ -426,6 +445,7 @@ export const providers = [
 		color: "#10b981",
 		website: "https://nano-gpt.com",
 		announcement: null,
+		hidden: true,
 	},
 	{
 		id: "bytedance",
@@ -457,6 +477,20 @@ export const providers = [
 		cancellation: true,
 		color: "#7C3AED",
 		website: "https://minimax.io",
+		announcement: null,
+		hidden: true,
+	},
+	{
+		id: "custom",
+		name: "Custom",
+		description: "Custom OpenAI-compatible provider with configurable base URL",
+		env: {
+			required: {},
+		},
+		streaming: true,
+		cancellation: true,
+		color: "#6b7280",
+		website: null,
 		announcement: null,
 	},
 ] as const satisfies ProviderDefinition[];

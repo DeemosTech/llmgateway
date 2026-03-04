@@ -54,16 +54,20 @@ interface ProviderKeysListProps {
 	};
 }
 
-function formatOptionLabel(key: string, value: string): string {
+function formatOptionLabel(key: string, value: string | boolean): string {
 	const labels: Record<string, string> = {
 		aws_bedrock_region_prefix: "Region",
 		azure_resource: "Resource",
 		azure_api_version: "API Version",
 		azure_deployment_type: "Deployment",
 		azure_validation_model: "Validation Model",
+		proxy: "Proxy",
 	};
 
 	const label = labels[key] || key;
+	if (key === "proxy") {
+		return value ? "Proxy: Enabled" : "Proxy: Disabled";
+	}
 	return `${label}: ${value}`;
 }
 
@@ -113,9 +117,9 @@ export function ProviderKeysList({
 		organizationKeys.map((key) => [key.provider, key]),
 	);
 
-	// Filter out LLM Gateway from the providers list
+	// Filter out LLM Gateway and hidden providers from the providers list
 	const availableProviders = providers.filter(
-		(provider) => provider.id !== "llmgateway",
+		(provider) => provider.id !== "llmgateway" && !provider.hidden,
 	);
 
 	const deleteKey = (id: string) => {

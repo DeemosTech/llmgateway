@@ -391,6 +391,13 @@ export interface ProviderKeyOptions {
 	azure_api_version?: string;
 	azure_deployment_type?: "openai" | "ai-foundry";
 	azure_validation_model?: string;
+	google_vertex_project?: string;
+	google_vertex_region?: string;
+	proxy?: boolean;
+	/**
+	 * Provider-specific proxy URL (overrides global proxy configuration)
+	 */
+	proxy_url?: string;
 }
 
 export const providerKey = pgTable(
