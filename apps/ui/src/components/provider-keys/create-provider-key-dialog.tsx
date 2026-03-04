@@ -194,6 +194,12 @@ export function CreateProviderKeyDialog({
 			}
 			payload.options = options;
 		}
+		if (selectedProvider === "aws-bedrock") {
+			payload.options = {
+				aws_bedrock_region_prefix: awsBedrockRegionPrefix,
+				proxy: useProxy,
+			};
+		}
 		if (selectedProvider === "azure") {
 			if (!azureResource) {
 				toast({
@@ -208,6 +214,7 @@ export function CreateProviderKeyDialog({
 				azure_api_version: azureApiVersion,
 				azure_deployment_type: azureDeploymentType,
 				azure_validation_model: azureValidationModel,
+				proxy: useProxy,
 			};
 			if (useProxy) {
 				options.proxy = useProxy;
@@ -252,6 +259,33 @@ export function CreateProviderKeyDialog({
 			if (proxyUrl) {
 				payload.options.proxy_url = proxyUrl;
 			}
+		}
+		if (selectedProvider === "google-vertex") {
+			if (!googleVertexProject) {
+				toast({
+					title: "Error",
+					description: "Google Cloud project ID is required for Vertex AI",
+					variant: "destructive",
+				});
+				return;
+			}
+			const options: any = {
+				google_vertex_project: googleVertexProject,
+				google_vertex_region: googleVertexRegion || undefined,
+				proxy: useProxy,
+			};
+			if (proxyUrl) {
+				options.proxy_url = proxyUrl;
+			}
+			payload.options = options;
+		}
+		// For all other providers, just set proxy option if specified
+		if (!payload.options && useProxy) {
+			payload.options = {
+				proxy: useProxy,
+			};
+		} else if (payload.options && useProxy) {
+			payload.options.proxy = useProxy;
 		}
 
 		setIsValidating(true);

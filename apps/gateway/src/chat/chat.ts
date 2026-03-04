@@ -1431,6 +1431,7 @@ chat.openapi(completions, async (c) => {
 	}
 
 	let url: string | undefined;
+	let useProxy: boolean = false;
 
 	// Get the provider key for the selected provider based on project mode
 
