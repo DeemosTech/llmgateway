@@ -50,6 +50,11 @@ export interface ProviderContext {
 	frequency_penalty: number | undefined;
 	presence_penalty: number | undefined;
 	headers: Record<string, string>;
+	/**
+	 * Whether to use a proxy for this request
+	 * Determined by: model-level → provider-level (providerKey.options.proxy) → global configuration
+	 */
+	useProxy: boolean;
 }
 
 export interface OriginalRequestParams {
@@ -122,6 +127,41 @@ export async function resolveProviderContext(
 	const usedModelMapping = usedModel;
 	const usedModelFormatted = `${usedProvider}/${baseModelName}`;
 
+	// Determine whether to use proxy for this request
+	let useProxy = false;
+
+	// 1. Check model-level configuration (ProviderModelMapping)
+	let providerMappingForSelected = modelInfo.providers.find(
+		(p) => p.providerId === usedProvider && p.modelName === usedModel,
+	);
+	if (providerMappingForSelected?.proxy !== undefined) {
+		useProxy = providerMappingForSelected.proxy;
+	} else {
+		// 2. Check provider-level configuration (providerKey.options.proxy)
+		if (project.mode === "api-keys" || project.mode === "hybrid") {
+			let providerKeyToCheck:
+				| InferSelectModel<typeof tables.providerKey>
+				| undefined;
+			if (usedProvider === "custom" && options.customProviderName) {
+				providerKeyToCheck = await findCustomProviderKey(
+					project.organizationId,
+					options.customProviderName,
+				);
+			} else {
+				providerKeyToCheck = await findProviderKey(
+					project.organizationId,
+					usedProvider,
+				);
+			}
+			if (providerKeyToCheck?.options?.proxy !== undefined) {
+				useProxy = providerKeyToCheck.options.proxy;
+			}
+		}
+		// 3. Check global configuration (environment variables) as fallback
+		// Note: Global proxy configuration via LLM_HTTP_PROXY/LLM_HTTPS_PROXY is not implemented here
+		// as per user request to prioritize database-level configuration
+	}
+
 	// --- Token resolution ---
 	let providerKey: InferSelectModel<typeof tables.providerKey> | undefined;
 	let usedToken: string | undefined;
@@ -175,7 +215,7 @@ export async function resolveProviderContext(
 	}
 
 	// --- Look up the specific provider mapping for the selected provider ---
-	const providerMappingForSelected = modelInfo.providers.find(
+	providerMappingForSelected = modelInfo.providers.find(
 		(p) => p.providerId === usedProvider && p.modelName === usedModel,
 	);
 
@@ -361,5 +401,6 @@ export async function resolveProviderContext(
 		frequency_penalty,
 		presence_penalty,
 		headers,
+		useProxy,
 	};
 }

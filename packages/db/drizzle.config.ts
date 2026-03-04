@@ -10,6 +10,7 @@ export default defineConfig({
 		prefix: "unix",
 	},
 	dbCredentials: {
-		url: process.env.DATABASE_URL ?? "postgres://postgres:pw@localhost:5432/db",
+		url:
+			process.env.DATABASE_URL ?? "postgres://postgres:pw@localhost:5432/test",
 	},
 });
