@@ -31,6 +31,7 @@ export async function syncProvidersAndModels() {
 					website: providerDef.website,
 					announcement: providerDef.announcement,
 					status: "active",
+					hidden: providerDef.hidden ?? false,
 				})
 				.onConflictDoUpdate({
 					target: provider.id,
@@ -42,6 +43,7 @@ export async function syncProvidersAndModels() {
 						color: providerDef.color,
 						website: providerDef.website,
 						announcement: providerDef.announcement,
+						hidden: providerDef.hidden ?? false,
 						updatedAt: new Date(),
 					},
 				});

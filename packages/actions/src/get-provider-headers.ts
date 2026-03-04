@@ -50,6 +50,7 @@ export function getProviderHeaders(
 		case "deepseek":
 		case "perplexity":
 		case "novita":
+		case "tuzi":
 		case "moonshot":
 		case "alibaba":
 		case "nebius":

@@ -4,13 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
 	ChevronUp,
 	ComputerIcon,
-	CreditCard,
 	ExternalLink,
 	MoonIcon,
 	Shield,
 	SunIcon,
 	User as UserIcon,
-	X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -21,15 +19,12 @@ import {
 } from "next/navigation";
 import { useTheme } from "next-themes";
 import { usePostHog } from "posthog-js/react";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 
-import { TopUpCreditsDialog } from "@/components/credits/top-up-credits-dialog";
 import {
 	AnimatedActivity,
 	AnimatedBarChart3,
-	AnimatedBotMessageSquare,
 	AnimatedChartColumnBig,
-	AnimatedExternalLink,
 	AnimatedKey,
 	AnimatedKeyRound,
 	AnimatedLayoutDashboard,
@@ -38,12 +33,10 @@ import {
 	AnimatedShield,
 	AnimatedShieldAlert,
 } from "@/components/dashboard/animated-nav-icons";
-import { ReferralDialog } from "@/components/dashboard/referral-dialog";
 import { useDashboardNavigation } from "@/hooks/useDashboardNavigation";
 import { useUser } from "@/hooks/useUser";
 import { clearLastUsedProjectCookiesAction } from "@/lib/actions/last-used-project";
 import { useAuth } from "@/lib/auth-client";
-import { Button } from "@/lib/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -128,19 +121,6 @@ const PROJECT_SETTINGS = [
 
 const ORGANIZATION_SETTINGS = [
 	{
-		href: "org/billing",
-		label: "Billing",
-		search: { success: undefined, canceled: undefined },
-	},
-	{
-		href: "org/transactions",
-		label: "Transactions",
-	},
-	{
-		href: "org/referrals",
-		label: "Referrals",
-	},
-	{
 		href: "org/policies",
 		label: "Policies",
 	},
@@ -165,12 +145,6 @@ const USER_MENU_ITEMS = [
 		href: "settings/account",
 		label: "Account",
 		icon: UserIcon,
-	},
-	{
-		href: "org/billing",
-		label: "Billing",
-		icon: CreditCard,
-		search: { success: undefined, canceled: undefined },
 	},
 	{
 		href: "settings/security",
@@ -438,15 +412,7 @@ function OrganizationSection({
 								<SidebarMenuSubItem key={item.href}>
 									<SidebarMenuSubButton asChild isActive={isActive(item.href)}>
 										<Link
-											href={
-												"search" in item
-													? (buildUrlWithParams(
-															buildOrgUrl(item.href),
-															searchParams,
-															item.search,
-														) as Route)
-													: buildOrgUrl(item.href)
-											}
+											href={buildOrgUrl(item.href)}
 											onClick={() => {
 												if (isMobile) {
 													toggleSidebar();
@@ -569,35 +535,6 @@ function ToolsResourcesSection({
 	);
 }
 
-function CreditsDisplay({
-	selectedOrganization,
-}: {
-	selectedOrganization: Organization | null;
-}) {
-	const creditsBalance = selectedOrganization
-		? Number(selectedOrganization.credits).toFixed(2)
-		: "0.00";
-
-	return (
-		<div className="px-2 py-1.5 group-data-[collapsible=icon]:hidden">
-			<TopUpCreditsDialog>
-				<button className="w-full flex items-center justify-between p-2 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-left">
-					<div className="flex items-center gap-2">
-						<CreditCard className="h-4 w-4 text-muted-foreground" />
-						<div className="flex flex-col">
-							<span className="text-sm font-medium">Credits</span>
-							<span className="text-xs text-muted-foreground">
-								${creditsBalance}
-							</span>
-						</div>
-					</div>
-					<span className="text-xs text-muted-foreground">Add</span>
-				</button>
-			</TopUpCreditsDialog>
-		</div>
-	);
-}
-
 function ThemeSelect() {
 	const { theme, setTheme } = useTheme();
 
@@ -641,7 +578,7 @@ function UserDropdownMenu({
 	toggleSidebar: () => void;
 	onLogout: () => void;
 }) {
-	const { buildUrl, buildOrgUrl } = useDashboardNavigation();
+	const { buildUrl } = useDashboardNavigation();
 	const searchParams = useSearchParams();
 
 	const getUserInitials = () => {
@@ -686,20 +623,18 @@ function UserDropdownMenu({
 				</div>
 				<DropdownMenuSeparator />
 				{USER_MENU_ITEMS.map((item) => {
-					// Use buildOrgUrl for billing, buildUrl for other items
-					const urlBuilder =
-						item.href === "org/billing" ? buildOrgUrl : buildUrl;
+					// All user menu items now use buildUrl since we removed billing
 					return (
 						<DropdownMenuItem key={item.href} asChild>
 							<Link
 								href={
 									"search" in item
 										? (buildUrlWithParams(
-												urlBuilder(item.href),
+												buildUrl(item.href),
 												searchParams,
-												item.search,
+												item.search as Record<string, string | undefined>,
 											) as Route)
-										: urlBuilder(item.href)
+										: buildUrl(item.href)
 								}
 								onClick={() => {
 									if (isMobile) {
@@ -723,93 +658,6 @@ function UserDropdownMenu({
 	);
 }
 
-function useInviteBannerEligible(
-	selectedOrganization: Organization | null,
-): boolean {
-	const [eligible, setEligible] = useState(false);
-
-	useEffect(() => {
-		if (!selectedOrganization) {
-			return;
-		}
-
-		// Check if user has been active for at least 7 days
-		const orgCreatedAt = new Date(selectedOrganization.createdAt);
-		const daysSinceCreation =
-			(Date.now() - orgCreatedAt.getTime()) / (1000 * 60 * 60 * 24);
-		if (daysSinceCreation >= 7) {
-			setEligible(true);
-			return;
-		}
-
-		// Check if user has purchased credits (credits > 0)
-		if (Number(selectedOrganization.credits) > 0) {
-			setEligible(true);
-			return;
-		}
-
-		// Check if user has made 50+ API calls (set by dashboard)
-		const hasEnoughCalls =
-			localStorage.getItem("user_has_50_plus_calls") === "true";
-		if (hasEnoughCalls) {
-			setEligible(true);
-			return;
-		}
-
-		setEligible(false);
-	}, [selectedOrganization]);
-
-	return eligible;
-}
-
-function UpgradeCTA({
-	show,
-	onHide,
-	selectedOrganization,
-}: {
-	show: boolean;
-	onHide: () => void;
-	selectedOrganization: Organization | null;
-}) {
-	const eligible = useInviteBannerEligible(selectedOrganization);
-
-	if (!show || !selectedOrganization || !eligible) {
-		return null;
-	}
-
-	return (
-		<div className="px-4 py-2 group-data-[collapsible=icon]:hidden">
-			<div className="rounded-lg bg-linear-to-r from-blue-500 to-purple-600 p-4 text-white">
-				<div className="flex items-start justify-between">
-					<div className="flex-1">
-						<h3 className="text-sm font-semibold">Invite your friends</h3>
-						<p className="text-xs text-blue-100 mt-1">
-							Invite friends and teammates and earn bonus credits
-						</p>
-					</div>
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={onHide}
-						className="h-6 w-6 p-0 text-white hover:bg-white/20"
-					>
-						<X className="h-3 w-3" />
-					</Button>
-				</div>
-				<ReferralDialog selectedOrganization={selectedOrganization}>
-					<Button
-						variant="secondary"
-						size="sm"
-						className="mt-2 w-full bg-white text-blue-600 hover:bg-blue-50"
-					>
-						Invite &amp; earn
-					</Button>
-				</ReferralDialog>
-			</div>
-		</div>
-	);
-}
-
 export function DashboardSidebar({
 	organizations,
 	onSelectOrganization,
@@ -823,35 +671,11 @@ export function DashboardSidebar({
 	const posthog = usePostHog();
 	const queryClient = useQueryClient();
 	const { signOut } = useAuth();
-	const [showUpgradeCTA, setShowUpgradeCTA] = useState(true);
-	const [ctaLoaded, setCTALoaded] = useState(false);
 
 	const { user } = useUser({
 		redirectTo: "/login",
 		redirectWhen: "unauthenticated",
 	});
-
-	// Check localStorage for dismissed CTA state after hydration
-	useEffect(() => {
-		const dismissed = localStorage.getItem("upgradeCTA_dismissed");
-		if (dismissed) {
-			try {
-				const dismissedData = JSON.parse(dismissed);
-				const now = Date.now();
-				// Check if 2 weeks (14 days) have passed
-				if (now - dismissedData.timestamp < 14 * 24 * 60 * 60 * 1000) {
-					setShowUpgradeCTA(false); // Still within 2 weeks, keep hidden
-				} else {
-					// Expired, remove from localStorage
-					localStorage.removeItem("upgradeCTA_dismissed");
-				}
-			} catch {
-				// Invalid JSON, remove the item
-				localStorage.removeItem("upgradeCTA_dismissed");
-			}
-		}
-		setCTALoaded(true);
-	}, []);
 
 	// selectedOrganization is now passed as a prop from the layout
 
@@ -873,37 +697,9 @@ export function DashboardSidebar({
 				icon: AnimatedMessageSquare,
 				internal: true,
 			},
-			{
-				href:
-					process.env.NODE_ENV === "development"
-						? "http://localhost:3003"
-						: "https://chat.llmgateway.io",
-				label: "Chat",
-				icon: AnimatedBotMessageSquare,
-				internal: false,
-			},
-			{
-				href: "https://docs.llmgateway.io",
-				label: "Documentation",
-				icon: AnimatedExternalLink,
-				internal: false,
-			},
 		],
 		[],
 	);
-
-	const hideCreditCTA = () => {
-		setShowUpgradeCTA(false);
-		// Persist dismissal in localStorage with timestamp
-		if (typeof window !== "undefined") {
-			localStorage.setItem(
-				"upgradeCTA_dismissed",
-				JSON.stringify({
-					timestamp: Date.now(),
-				}),
-			);
-		}
-	};
 
 	const logout = async () => {
 		posthog.reset();
@@ -983,12 +779,6 @@ export function DashboardSidebar({
 			</SidebarContent>
 
 			<SidebarFooter>
-				<CreditsDisplay selectedOrganization={selectedOrganization} />
-				<UpgradeCTA
-					show={showUpgradeCTA && ctaLoaded}
-					onHide={hideCreditCTA}
-					selectedOrganization={selectedOrganization}
-				/>
 				<SidebarMenu>
 					<SidebarMenuItem>
 						<UserDropdownMenu

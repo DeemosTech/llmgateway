@@ -732,6 +732,7 @@ export const provider = pgTable(
 		avgTimeToFirstToken: real(),
 		avgTimeToFirstReasoningToken: real(),
 		statsUpdatedAt: timestamp(),
+		hidden: boolean().notNull().default(false),
 	},
 	(table) => [index("provider_status_idx").on(table.status)],
 );
