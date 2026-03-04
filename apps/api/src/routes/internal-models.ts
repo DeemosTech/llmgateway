@@ -19,6 +19,7 @@ const providerSchema = z.object({
 	website: z.string().nullable(),
 	announcement: z.string().nullable(),
 	status: z.enum(["active", "inactive"]),
+	hidden: z.boolean(),
 });
 
 // Model provider mapping schema
@@ -102,6 +103,9 @@ internalModels.openapi(getModelsRoute, async (c) => {
 				where: {
 					status: { eq: "active" },
 				},
+				with: {
+					provider: true,
+				},
 			},
 		},
 		orderBy: {
@@ -112,10 +116,17 @@ internalModels.openapi(getModelsRoute, async (c) => {
 	// Transform to match expected schema (rename modelProviderMappings to mappings)
 	const transformedModels = models.map((model) => ({
 		...model,
-		mappings: model.modelProviderMappings,
+		mappings: model.modelProviderMappings.filter(
+			(mapping) => !mapping.provider?.hidden,
+		),
 	}));
 
-	return c.json({ models: transformedModels });
+	// Filter out models with no remaining mappings
+	const modelsWithVisibleMappings = transformedModels.filter(
+		(model) => model.mappings.length > 0,
+	);
+
+	return c.json({ models: modelsWithVisibleMappings });
 });
 
 // GET /internal/providers - Returns providers sorted by createdAt desc
@@ -144,6 +155,7 @@ internalModels.openapi(getProvidersRoute, async (c) => {
 	const providers = await db.query.provider.findMany({
 		where: {
 			status: { eq: "active" },
+			hidden: { eq: false },
 		},
 		orderBy: {
 			createdAt: "desc",

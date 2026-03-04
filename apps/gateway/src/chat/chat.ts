@@ -65,6 +65,7 @@ import {
 	type ProviderRequestBody,
 	providers,
 	type WebSearchTool,
+	getProviderDefinition,
 } from "@llmgateway/models";
 
 import { completionsRequestSchema } from "./schemas/completions.js";
@@ -714,7 +715,7 @@ chat.openapi(completions, async (c) => {
 			// Check which providers have environment tokens available
 			const envProviders: string[] = [];
 			const supportedProviders = providers
-				.filter((p) => p.id !== "llmgateway")
+				.filter((p) => p.id !== "llmgateway" && !p.hidden)
 				.map((p) => p.id);
 			for (const provider of supportedProviders) {
 				if (hasProviderEnvironmentToken(provider as Provider)) {
@@ -770,12 +771,15 @@ chat.openapi(completions, async (c) => {
 			const candidateAllowedProviders = candidateIam.allowedProviders;
 
 			// Check if any of the model's providers are available
-			const availableModelProviders = modelDef.providers.filter(
-				(provider) =>
+			const availableModelProviders = modelDef.providers.filter((provider) => {
+				const providerDef = getProviderDefinition(provider.providerId);
+				return (
 					availableProviders.includes(provider.providerId) &&
 					(!candidateAllowedProviders ||
-						candidateAllowedProviders.includes(provider.providerId)),
-			);
+						candidateAllowedProviders.includes(provider.providerId)) &&
+					!providerDef?.hidden
+				);
+			});
 
 			// Filter by context size requirement, reasoning capability, and deprecation status
 			const suitableProviders = availableModelProviders.filter((provider) => {

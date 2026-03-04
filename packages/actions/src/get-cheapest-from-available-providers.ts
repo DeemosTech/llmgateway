@@ -125,8 +125,13 @@ export function getCheapestFromAvailableProviders<
 		return null;
 	}
 
-	// Filter out unstable and experimental providers
+	// Filter out unstable and experimental providers, and hidden providers
 	const stableProviders = availableModelProviders.filter((provider) => {
+		const providerDef = getProviderDefinition(provider.providerId);
+		if (providerDef?.hidden) {
+			return false;
+		}
+
 		const providerInfo = modelWithPricing.providers.find(
 			(p) => p.providerId === provider.providerId,
 		);
