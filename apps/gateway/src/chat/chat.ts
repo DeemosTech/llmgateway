@@ -3,6 +3,7 @@ import { encode } from "gpt-tokenizer";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 
+import { createProxyAgent } from "@/chat/tools/create-proxy-agent.js";
 import { validateSource } from "@/chat/tools/validate-source.js";
 import { reportKeyError, reportKeySuccess } from "@/lib/api-key-health.js";
 import {
@@ -1426,6 +1427,7 @@ chat.openapi(completions, async (c) => {
 	}
 
 	let url: string | undefined;
+	let useProxy: boolean = false;
 
 	// Get the provider key for the selected provider based on project mode
 
@@ -2414,6 +2416,7 @@ chat.openapi(completions, async (c) => {
 							top_p = ctx.top_p;
 							frequency_penalty = ctx.frequency_penalty;
 							presence_penalty = ctx.presence_penalty;
+							useProxy = ctx.useProxy;
 						} catch {
 							failedProviderIds.add(nextProvider.providerId);
 							// Don't consume a retry slot for context-resolution failures
@@ -2452,12 +2455,17 @@ chat.openapi(completions, async (c) => {
 							requestCanBeCanceled ? controller : undefined,
 						);
 
-						res = await fetch(url, {
+						const agent = createProxyAgent(url, useProxy, providerKey);
+						const fetchOptions: RequestInit & { agent?: any } = {
 							method: "POST",
 							headers,
 							body: JSON.stringify(requestBody),
 							signal: fetchSignal,
-						});
+						};
+						if (agent) {
+							fetchOptions.agent = agent;
+						}
+						res = await fetch(url, fetchOptions);
 					} catch (error) {
 						// Clean up the event listeners
 						c.req.raw.signal.removeEventListener("abort", onAbort);
@@ -5016,6 +5024,7 @@ chat.openapi(completions, async (c) => {
 				top_p = ctx.top_p;
 				frequency_penalty = ctx.frequency_penalty;
 				presence_penalty = ctx.presence_penalty;
+				useProxy = ctx.useProxy;
 			} catch {
 				failedProviderIds.add(nextProvider.providerId);
 				// Don't consume a retry slot for context-resolution failures
@@ -5061,12 +5070,17 @@ chat.openapi(completions, async (c) => {
 				requestCanBeCanceled ? controller : undefined,
 			);
 
-			res = await fetch(url, {
+			const agent = createProxyAgent(url, useProxy, providerKey);
+			const fetchOptions: RequestInit & { agent?: any } = {
 				method: "POST",
 				headers,
 				body: JSON.stringify(requestBody),
 				signal: fetchSignal,
-			});
+			};
+			if (agent) {
+				fetchOptions.agent = agent;
+			}
+			res = await fetch(url, fetchOptions);
 		} catch (error) {
 			// Check for timeout error first (AbortSignal.timeout throws TimeoutError)
 			if (isTimeoutError(error)) {

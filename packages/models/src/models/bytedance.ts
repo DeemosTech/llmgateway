@@ -2,8 +2,8 @@ import type { ModelDefinition } from "@/models.js";
 
 export const bytedanceModels = [
 	{
-		id: "seed-1-6-250615",
-		name: "Seed 1.6 (250615)",
+		id: "doubao-seed-1-6-250615",
+		name: "Doubao Seed 1.6 (250615)",
 		description:
 			"ByteDance Seed 1.6 vision model with thinking/non-thinking modes, multimodal inputs, and 256K context window",
 		family: "bytedance",
@@ -27,8 +27,8 @@ export const bytedanceModels = [
 		],
 	},
 	{
-		id: "seed-1-6-250915",
-		name: "Seed 1.6 (250915)",
+		id: "doubao-seed-1-6-250915",
+		name: "Doubao Seed 1.6 (250915)",
 		description:
 			"ByteDance Seed 1.6 vision model released September 15, 2025 with thinking/non-thinking modes and multimodal inputs",
 		family: "bytedance",
@@ -52,16 +52,16 @@ export const bytedanceModels = [
 		],
 	},
 	{
-		id: "seed-1-6-flash-250715",
-		name: "Seed 1.6 Flash (250715)",
+		id: "doubao-seed-1-6-flash-250828",
+		name: "Doubao Seed 1.6 Flash (250828)",
 		description:
-			"ByteDance Seed 1.6 Flash - faster, cost-effective vision model released July 15, 2025",
+			"Doubao Seed 1.6 Flash - faster, cost-effective vision model released July 15, 2025",
 		family: "bytedance",
-		releasedAt: new Date("2025-07-26"),
+		releasedAt: new Date("2025-08-29"),
 		providers: [
 			{
 				providerId: "bytedance",
-				modelName: "seed-1-6-flash-250715",
+				modelName: "doubao-seed-1-6-flash-250828",
 				inputPrice: 0.00007 / 1000,
 				cachedInputPrice: 0.000015 / 1000,
 				outputPrice: 0.0003 / 1000,
@@ -77,7 +77,7 @@ export const bytedanceModels = [
 		],
 	},
 	{
-		id: "seed-1-8-251228",
+		id: "doubao-seed-1-8-251228",
 		name: "Seed 1.8 (251228)",
 		description:
 			"ByteDance Seed 1.8 advanced vision model released December 28, 2025 with enhanced capabilities",
@@ -102,8 +102,8 @@ export const bytedanceModels = [
 		],
 	},
 	{
-		id: "seedream-4-0",
-		name: "Seedream 4.0",
+		id: "doubao-seedream-4-0",
+		name: "Doubao Seedream 4.0",
 		description:
 			"ByteDance Seedream 4.0 text-to-image generation model with high-quality visual output",
 		family: "bytedance",
@@ -129,8 +129,8 @@ export const bytedanceModels = [
 		],
 	},
 	{
-		id: "seedream-4-5",
-		name: "Seedream 4.5",
+		id: "doubao-seedream-4-5",
+		name: "Doubao Seedream 4.5",
 		description:
 			"ByteDance Seedream 4.5 advanced text-to-image generation model with enhanced quality and consistency",
 		family: "bytedance",

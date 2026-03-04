@@ -48,6 +48,11 @@ export interface PricingTier {
 }
 
 export interface ProviderModelMapping {
+	/**
+	 * Whether to use a proxy for requests to this model.
+	 * If not specified, defaults to provider-level or global configuration.
+	 */
+	proxy?: boolean;
 	providerId: (typeof providers)[number]["id"];
 	modelName: string;
 	/**
