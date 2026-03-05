@@ -30,6 +30,7 @@ import {
 	AnimatedLayoutDashboard,
 	AnimatedMessageSquare,
 	AnimatedSettings,
+	AnimatedPercent,
 	AnimatedShield,
 	AnimatedShieldAlert,
 } from "@/components/dashboard/animated-nav-icons";
@@ -374,6 +375,14 @@ function OrganizationSection({
 						label="Security Events"
 						icon={AnimatedShieldAlert}
 						isActive={isActive("org/security-events")}
+						isMobile={isMobile}
+						toggleSidebar={toggleSidebar}
+					/>
+					<OrgNavItem
+						href={buildOrgUrl("org/discounts")}
+						label="Your Discounts"
+						icon={AnimatedPercent}
+						isActive={isActive("org/discounts")}
 						isMobile={isMobile}
 						toggleSidebar={toggleSidebar}
 					/>
