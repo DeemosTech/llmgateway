@@ -194,12 +194,6 @@ export function CreateProviderKeyDialog({
 			}
 			payload.options = options;
 		}
-		if (selectedProvider === "aws-bedrock") {
-			payload.options = {
-				aws_bedrock_region_prefix: awsBedrockRegionPrefix,
-				proxy: useProxy,
-			};
-		}
 		if (selectedProvider === "azure") {
 			if (!azureResource) {
 				toast({
@@ -214,7 +208,6 @@ export function CreateProviderKeyDialog({
 				azure_api_version: azureApiVersion,
 				azure_deployment_type: azureDeploymentType,
 				azure_validation_model: azureValidationModel,
-				proxy: useProxy,
 			};
 			if (useProxy) {
 				options.proxy = useProxy;
@@ -272,20 +265,29 @@ export function CreateProviderKeyDialog({
 			const options: any = {
 				google_vertex_project: googleVertexProject,
 				google_vertex_region: googleVertexRegion || undefined,
+			};
+			if (useProxy) {
+				options.proxy = useProxy;
+				if (proxyUrl) {
+					options.proxy_url = proxyUrl;
+				}
+			}
+			payload.options = options;
+		}
+		// For all other providers, just set proxy option if specified
+		if (!payload.options && useProxy) {
+			const options: any = {
 				proxy: useProxy,
 			};
 			if (proxyUrl) {
 				options.proxy_url = proxyUrl;
 			}
 			payload.options = options;
-		}
-		// For all other providers, just set proxy option if specified
-		if (!payload.options && useProxy) {
-			payload.options = {
-				proxy: useProxy,
-			};
 		} else if (payload.options && useProxy) {
 			payload.options.proxy = useProxy;
+			if (proxyUrl) {
+				payload.options.proxy_url = proxyUrl;
+			}
 		}
 
 		setIsValidating(true);
