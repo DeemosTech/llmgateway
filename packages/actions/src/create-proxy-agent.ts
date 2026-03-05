@@ -1,19 +1,18 @@
-import { HTTPException } from "hono/http-exception";
 import { ProxyAgent } from "undici";
 
-import type { InferSelectModel, tables } from "@llmgateway/db";
+import type { ProviderKeyOptions } from "@llmgateway/db";
 
 /**
  * Creates a proxy agent based on the target URL and proxy configuration
  * @param url The target URL to proxy
  * @param useProxy Whether to use a proxy for this request
- * @param providerKey The provider key with proxy configuration (optional)
+ * @param providerKeyOptions The provider key options with proxy configuration (optional)
  * @returns Proxy dispatcher if needed, undefined otherwise
  */
 export function createProxyAgent(
 	url: string,
 	useProxy: boolean,
-	providerKey?: InferSelectModel<typeof tables.providerKey>,
+	providerKeyOptions?: ProviderKeyOptions,
 ): ProxyAgent | undefined {
 	if (!useProxy) {
 		return undefined;
@@ -25,8 +24,8 @@ export function createProxyAgent(
 	let proxyUrl: string | undefined;
 
 	// Try to get provider-specific proxy from provider key options
-	if (providerKey?.options?.proxy_url) {
-		proxyUrl = providerKey.options.proxy_url;
+	if (providerKeyOptions?.proxy_url) {
+		proxyUrl = providerKeyOptions.proxy_url;
 	} else {
 		// Fall back to global proxy configuration
 		proxyUrl =
@@ -64,8 +63,6 @@ export function createProxyAgent(
 		// Create undici ProxyAgent (works for both HTTP and HTTPS)
 		return new ProxyAgent({ uri: proxyUrl });
 	} catch (error) {
-		throw new HTTPException(500, {
-			message: "Invalid proxy configuration: " + error,
-		});
+		throw new Error("Invalid proxy configuration: " + error);
 	}
 }

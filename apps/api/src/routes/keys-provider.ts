@@ -197,6 +197,7 @@ keysProvider.openapi(create, async (c) => {
 				baseUrl,
 				isTestEnv,
 				options,
+				options?.proxy ?? false,
 			);
 		}
 	} catch (error) {
