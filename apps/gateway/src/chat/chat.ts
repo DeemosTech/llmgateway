@@ -2399,15 +2399,15 @@ chat.openapi(completions, async (c) => {
 							requestCanBeCanceled ? controller : undefined,
 						);
 
-						const agent = createProxyAgent(url, useProxy, providerKey);
-						const fetchOptions: RequestInit & { agent?: any } = {
+						const dispatcher = createProxyAgent(url, useProxy, providerKey);
+						const fetchOptions: RequestInit & { dispatcher?: any } = {
 							method: "POST",
 							headers,
 							body: JSON.stringify(requestBody),
 							signal: fetchSignal,
 						};
-						if (agent) {
-							fetchOptions.agent = agent;
+						if (dispatcher) {
+							fetchOptions.dispatcher = dispatcher;
 						}
 						res = await fetch(url, fetchOptions);
 					} catch (error) {
@@ -5009,15 +5009,15 @@ chat.openapi(completions, async (c) => {
 				requestCanBeCanceled ? controller : undefined,
 			);
 
-			const agent = createProxyAgent(url, useProxy, providerKey);
-			const fetchOptions: RequestInit & { agent?: any } = {
+			const dispatcher = createProxyAgent(url, useProxy, providerKey);
+			const fetchOptions: RequestInit & { dispatcher?: any } = {
 				method: "POST",
 				headers,
 				body: JSON.stringify(requestBody),
 				signal: fetchSignal,
 			};
-			if (agent) {
-				fetchOptions.agent = agent;
+			if (dispatcher) {
+				fetchOptions.dispatcher = dispatcher;
 			}
 			res = await fetch(url, fetchOptions);
 		} catch (error) {

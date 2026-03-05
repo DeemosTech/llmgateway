@@ -43,10 +43,9 @@
 		"gpt-tokenizer": "3.0.1",
 		"hono": "^4.12.2",
 		"hono-openapi": "^1.1.1",
-		"http-proxy-agent": "7.0.2",
-		"https-proxy-agent": "7.0.6",
 		"ioredis": "5.7.0",
 		"redis": "5.9.0",
+		"undici": "7.22.0",
 		"worker": "workspace:*",
 		"zod": "3.25.75",
 		"zod-openapi": "^5.4.3"
