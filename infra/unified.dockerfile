@@ -1,4 +1,5 @@
-FROM debian:12-slim
+# syntax=registry.deemos.com/library/dockerfile:1-labs
+FROM registry.deemos.com/library/debian:12-slim
 
 # Install base dependencies and runtime requirements
 # Add PostgreSQL 17 official repository

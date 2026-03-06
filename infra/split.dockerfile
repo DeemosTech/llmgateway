@@ -1,4 +1,5 @@
-FROM debian:12-slim AS base-builder
+# syntax=registry.deemos.com/library/dockerfile:1-labs
+FROM registry.deemos.com/library/debian:12-slim AS base-builder
 
 # Install base dependencies including tini for better caching
 RUN apt-get update && apt-get install -y --no-install-recommends \
