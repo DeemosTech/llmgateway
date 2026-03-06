@@ -15,13 +15,17 @@ import { notFound } from "next/navigation";
 import Footer from "@/components/landing/footer";
 import { Navbar } from "@/components/landing/navbar";
 import { CopyModelName } from "@/components/models/copy-model-name";
-import { GlobalDiscountBanner } from "@/components/models/global-discount-banner";
+import {
+	GlobalDiscountBanner,
+	type DiscountData,
+} from "@/components/models/global-discount-banner";
 import { ModelProviderCard } from "@/components/models/model-provider-card";
 import { ModelStatusBadgeAuto } from "@/components/models/model-status-badge-auto";
 import { ProviderTabs } from "@/components/models/provider-tabs";
 import { Badge } from "@/lib/components/badge";
 import { Button } from "@/lib/components/button";
 import { getConfig } from "@/lib/config-server";
+import { fetchServerData } from "@/lib/server-api";
 
 import {
 	models as modelDefinitions,
@@ -34,6 +38,30 @@ import type { Metadata } from "next";
 
 interface PageProps {
 	params: Promise<{ name: string }>;
+}
+
+async function getCurrentModelDiscount(
+	modelId: string,
+): Promise<DiscountData | null> {
+	const data = await fetchServerData<{ discounts: DiscountData[] }>(
+		"GET",
+		"/public/discounts/model/{modelId}",
+		{
+			params: {
+				path: { modelId },
+			},
+		},
+	);
+
+	return (
+		data?.discounts.find((discount) => {
+			if (!discount.expiresAt || discount.model !== modelId) {
+				return false;
+			}
+
+			return new Date(discount.expiresAt).getTime() > Date.now();
+		}) ?? null
+	);
 }
 
 export default async function ModelPage({ params }: PageProps) {
@@ -87,6 +115,7 @@ export default async function ModelPage({ params }: PageProps) {
 			providerInfo,
 		};
 	});
+	const currentModelDiscount = await getCurrentModelDiscount(decodedName);
 
 	const breadcrumbSchema = {
 		"@context": "https://schema.org",
@@ -397,12 +426,11 @@ export default async function ModelPage({ params }: PageProps) {
 						</div>
 					</div>
 
-					<div className="mb-6">
-						<GlobalDiscountBanner
-							modelId={decodedName}
-							apiUrl={config.apiUrl}
-						/>
-					</div>
+					{currentModelDiscount && (
+						<div className="mb-6">
+							<GlobalDiscountBanner discount={currentModelDiscount} />
+						</div>
+					)}
 
 					<div className="mb-8">
 						<h2 className="text-xl md:text-2xl font-semibold mb-4">
