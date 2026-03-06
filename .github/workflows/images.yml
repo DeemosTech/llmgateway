@@ -40,8 +40,8 @@ jobs:
           file: infra/split.dockerfile
           platforms: ${{ matrix.platform }}
           push: true
-          cache-to: type=inline
-          cache-from: type=registry,ref=registry.deemos.com/deemos/llmgateway-${{ matrix.app }}:latest
+          cache-to: type=registry,ref=registry.deemos.com/deemos/llmgateway-${{ matrix.app }}:buildcache
+          cache-from: type=registry,ref=registry.deemos.com/deemos/llmgateway-${{ matrix.app }}:buildcache
           target: ${{ matrix.app }}
           tags: |
             registry.deemos.com/deemos/llmgateway-${{ matrix.app }}:latest
