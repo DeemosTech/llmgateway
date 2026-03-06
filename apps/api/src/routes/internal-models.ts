@@ -64,6 +64,7 @@ const modelSchema = z.object({
 	family: z.string(),
 	free: z.boolean().nullable(),
 	output: z.array(z.string()).nullable(),
+	imageInputRequired: z.boolean().nullable(),
 	stability: z.enum(["stable", "beta", "unstable", "experimental"]).nullable(),
 	status: z.enum(["active", "inactive"]),
 	mappings: z.array(modelProviderMappingSchema),
