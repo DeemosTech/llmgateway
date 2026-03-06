@@ -286,19 +286,18 @@ export default async function ModelPage({ params }: PageProps) {
 								})()}{" "}
 								output tokens
 							</div>
-							{modelProviders.some((p) => p.imageOutputPrice) && (
+							{modelProviders.some((p) => p.imageOutputPrice !== undefined) && (
 								<div>
 									Starting at{" "}
 									{(() => {
 										const imageOutputPrices = modelProviders
-											.filter((p) => p.imageOutputPrice)
+											.filter((p) => p.imageOutputPrice !== undefined)
 											.map((p) => ({
 												price:
 													p.imageOutputPrice! *
 													1e6 *
 													(p.discount ? 1 - p.discount : 1),
-												originalPrice: p.imageOutputPrice! * 1e6,
-												discount: p.discount,
+												discount: p.discount !== 0 ? p.discount : undefined,
 											}));
 										if (imageOutputPrices.length === 0) {
 											return "Free";
