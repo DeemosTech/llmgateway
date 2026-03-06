@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM debian:12-slim AS base-builder
 
 # Install base dependencies including tini for better caching
