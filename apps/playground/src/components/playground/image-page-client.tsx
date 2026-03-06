@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { TopUpCreditsDialog } from "@/components/credits/top-up-credits-dialog";
 import { AuthDialog } from "@/components/playground/auth-dialog";
@@ -85,19 +86,29 @@ export default function ImagePageClient({
 		{ dataUrl: string; mediaType: string }[]
 	>([]);
 
-	// Detect if the primary selected model supports image input (editing)
-	const isEditModel = useMemo(() => {
-		const primary = selectedModels[0] ?? "";
-		const model = imageGenModels.find((m) => m.id === primary);
-		if (!model) {
-			return false;
-		}
-		return model.mappings.some(
-			(mapping) =>
-				mapping.imageInputPrice !== null &&
-				mapping.imageInputPrice !== undefined,
-		);
+	// Resolve model definitions for all selected models (handles "providerId/modelId" format)
+	const selectedModelDefs = useMemo(() => {
+		return selectedModels
+			.map((modelId) => {
+				const rootId = modelId.includes("/")
+					? modelId.split("/").pop()!
+					: modelId;
+				return imageGenModels.find((m) => m.id === rootId) ?? null;
+			})
+			.filter((m): m is NonNullable<typeof m> => m !== null);
 	}, [selectedModels, imageGenModels]);
+
+	// Detect if any selected model supports image input (editing)
+	const isEditModel = useMemo(() => {
+		return selectedModelDefs.some((m) =>
+			m.mappings.some((mapping) => mapping.vision === true),
+		);
+	}, [selectedModelDefs]);
+
+	// Detect if any selected model requires image input
+	const requiresImageInput = useMemo(() => {
+		return selectedModelDefs.some((m) => m.imageInputRequired === true);
+	}, [selectedModelDefs]);
 
 	// Auth
 	const isAuthenticated = !isUserLoading && !!user;
@@ -163,16 +174,10 @@ export default function ImagePageClient({
 		if (!config.availableSizes.includes(imageSize as never)) {
 			setImageSize(config.defaultSize);
 		}
-		const model = imageGenModels.find((m) => m.id === primaryModel);
-		const supportsImageInput = model?.mappings.some(
-			(mapping) =>
-				mapping.imageInputPrice !== null &&
-				mapping.imageInputPrice !== undefined,
-		);
-		if (!supportsImageInput) {
+		if (!isEditModel) {
 			setInputImages([]);
 		}
-	}, [selectedModels, imageSize, imageGenModels]);
+	}, [selectedModels, imageSize, imageGenModels, isEditModel]);
 
 	const getModelName = useCallback(
 		(modelId: string) => {
@@ -191,6 +196,13 @@ export default function ImagePageClient({
 				selectedModels.length === 0 ||
 				isGenerating
 			) {
+				return;
+			}
+
+			if (requiresImageInput && inputImages.length === 0) {
+				toast.error(
+					"This model requires an image input. Please add an image before generating.",
+				);
 				return;
 			}
 
@@ -365,6 +377,7 @@ export default function ImagePageClient({
 			imageSize,
 			imageCount,
 			inputImages,
+			requiresImageInput,
 		],
 	);
 
@@ -464,6 +477,7 @@ export default function ImagePageClient({
 						isGenerating={isGenerating}
 						onGenerate={generateImages}
 						isEditModel={isEditModel}
+						requiresImageInput={requiresImageInput}
 						inputImages={inputImages}
 						setInputImages={setInputImages}
 					/>

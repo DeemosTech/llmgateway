@@ -1748,6 +1748,7 @@ export const alibabaModels = [
 		description: "Alibaba's image editing model for modifying existing images.",
 		family: "alibaba",
 		output: ["text", "image"],
+		imageInputRequired: true,
 		releasedAt: new Date("2025-08-19"),
 		providers: [
 			{
@@ -1775,6 +1776,7 @@ export const alibabaModels = [
 			"Alibaba's flagship image editing model for high-quality image modifications.",
 		family: "alibaba",
 		output: ["text", "image"],
+		imageInputRequired: true,
 		releasedAt: new Date("2026-01-16"),
 		providers: [
 			{

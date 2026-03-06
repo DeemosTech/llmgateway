@@ -459,8 +459,6 @@ export async function POST(req: Request) {
 				},
 			});
 		} catch (error: unknown) {
-			const message =
-				error instanceof Error ? error.message : "Image generation failed";
 			const status =
 				typeof error === "object" &&
 				error !== null &&
@@ -468,9 +466,31 @@ export async function POST(req: Request) {
 				typeof (error as { status: unknown }).status === "number"
 					? (error as { status: number }).status
 					: 500;
-			return new Response(JSON.stringify({ error: message }), {
-				status,
-			});
+
+			const message =
+				error instanceof Error ? error.message : "Image generation failed";
+
+			// Try to extract a more detailed message from the provider response.
+			// AI SDK errors may embed the original gateway response in responseBody.
+			let detailedMessage: string | undefined;
+			if (typeof error === "object" && error !== null) {
+				const err = error as Record<string, unknown>;
+				if (typeof err.responseBody === "string") {
+					try {
+						const body = JSON.parse(err.responseBody);
+						if (typeof body.message === "string") {
+							detailedMessage = body.message;
+						}
+					} catch {
+						// ignore parse errors
+					}
+				}
+			}
+
+			return new Response(
+				JSON.stringify({ error: detailedMessage ?? message }),
+				{ status },
+			);
 		}
 	}
 

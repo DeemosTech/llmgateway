@@ -6286,6 +6286,7 @@ export interface operations {
                             family: string;
                             free: boolean | null;
                             output: string[] | null;
+                            imageInputRequired: boolean | null;
                             /** @enum {string|null} */
                             stability: "stable" | "beta" | "unstable" | "experimental" | null;
                             /** @enum {string} */
