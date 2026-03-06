@@ -9,6 +9,7 @@ jobs:
     runs-on: [arc-runner]
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         app: [api, gateway, playground, ui, docs, worker, admin, code]
         platform: [linux/amd64]
