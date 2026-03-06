@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM debian:12-slim
 
 # Install base dependencies and runtime requirements
