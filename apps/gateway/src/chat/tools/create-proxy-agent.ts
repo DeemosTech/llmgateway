@@ -12,7 +12,7 @@ import type { InferSelectModel, tables } from "@llmgateway/db";
  */
 export function createProxyAgent(
 	url: string,
-	useProxy: boolean,
+	useProxy: boolean | undefined,
 	providerKey?: InferSelectModel<typeof tables.providerKey>,
 ): ProxyAgent | undefined {
 	if (!useProxy) {

@@ -1431,7 +1431,6 @@ chat.openapi(completions, async (c) => {
 	}
 
 	let url: string | undefined;
-	let useProxy: boolean = false;
 
 	// Get the provider key for the selected provider based on project mode
 
@@ -1572,25 +1571,6 @@ chat.openapi(completions, async (c) => {
 		);
 	}
 
-	// Check if organization has credits for data retention costs
-	// Data storage is billed at $0.01 per 1M tokens, so we need credits when retention is enabled
-	if (organization && organization.retentionLevel === "retain") {
-		const regularCredits = parseFloat(organization.credits ?? "0");
-		const devPlanCreditsRemaining =
-			organization.devPlan !== "none"
-				? parseFloat(organization.devPlanCreditsLimit ?? "0") -
-					parseFloat(organization.devPlanCreditsUsed ?? "0")
-				: 0;
-		const totalAvailableCredits = regularCredits + devPlanCreditsRemaining;
-
-		if (totalAvailableCredits <= 0) {
-			throw new HTTPException(402, {
-				message:
-					"Organization has insufficient credits for data retention. Data retention requires credits for storage costs ($0.01 per 1M tokens). Please add credits or disable data retention in organization settings.",
-			});
-		}
-	}
-
 	if (!usedToken) {
 		throw new HTTPException(500, {
 			message: `No token`,
@@ -1641,6 +1621,15 @@ chat.openapi(completions, async (c) => {
 		throw new HTTPException(500, {
 			message: `Could not use provider: ${usedProvider}. ${error instanceof Error ? error.message : ""}`,
 		});
+	}
+
+	let useProxy: boolean | undefined =
+		getProviderDefinition(usedProvider)?.proxy;
+	if (providerKey?.options?.proxy === true) {
+		useProxy = true;
+	}
+	if (useProxy !== false && useProxy !== true) {
+		useProxy = false;
 	}
 
 	let useResponsesApi = url?.includes("/responses") ?? false;
