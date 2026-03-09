@@ -13,8 +13,8 @@ export function getConfig(): AppConfig {
 	const apiUrl = process.env.API_URL ?? "http://localhost:4002";
 	return {
 		hosted: process.env.HOSTED === "true",
-		apiUrl,
-		apiBackendUrl: process.env.API_BACKEND_URL ?? apiUrl,
+		apiUrl: apiUrl + "/api",
+		apiBackendUrl: (process.env.API_BACKEND_URL ?? apiUrl) + "/api",
 		githubUrl:
 			process.env.GITHUB_URL ?? "https://github.com/theopenco/llmgateway",
 		discordUrl: process.env.DISCORD_URL ?? "https://discord.gg/gcqcZeYWEz",

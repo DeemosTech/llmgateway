@@ -30,6 +30,9 @@ import type { ServerTypes } from "./vars.js";
 export const config = {
 	servers: [
 		{
+			url: "http://localhost:4002/api",
+		},
+		{
 			url: "http://localhost:4002",
 		},
 	],
@@ -213,20 +216,27 @@ app.openapi(root, async (c) => {
 	return c.json(response, statusCode as 200 | 503);
 });
 
-app.route("/stripe", stripeRoutes);
+// Create the /api prefixed router
+const api = new OpenAPIHono<ServerTypes>();
 
-app.route("/", beacon);
+api.route("/stripe", stripeRoutes);
 
-app.route("/", referral);
+api.route("/", beacon);
 
-app.route("/internal", internalModels);
+api.route("/", referral);
 
-app.route("/public/discounts", publicDiscounts);
+api.route("/internal", internalModels);
 
+api.route("/public/discounts", publicDiscounts);
+
+api.route("/", authHandler);
+
+api.route("/", routes);
+
+// Mount the api router at /api prefix
+app.route("/api", api);
+
+// Docs stay at root
 app.doc("/json", config);
 
 app.get("/docs", swaggerUI({ url: "./json" }));
-
-app.route("/", authHandler);
-
-app.route("/", routes);

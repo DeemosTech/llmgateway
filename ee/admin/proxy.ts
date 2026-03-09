@@ -48,7 +48,7 @@ export async function proxy(req: NextRequest) {
 	}
 
 	try {
-		const res = await fetch(`${apiUrl}/user/me`, {
+		const res = await fetch(`${apiUrl}/api/user/me`, {
 			method: "GET",
 			headers: {
 				Cookie: cookieHeader,
