@@ -13,8 +13,8 @@ export function getConfig(): AppConfig {
 	const apiUrl = process.env.API_URL ?? "http://localhost:4002";
 	return {
 		hosted: process.env.HOSTED === "true",
-		apiUrl,
-		apiBackendUrl: process.env.API_BACKEND_URL ?? apiUrl,
+		apiUrl: apiUrl + "/api",
+		apiBackendUrl: (process.env.API_BACKEND_URL ?? apiUrl) + "/api",
 		uiUrl: process.env.UI_URL ?? "http://localhost:3002",
 		playgroundUrl: process.env.PLAYGROUND_URL ?? "http://localhost:3003",
 		posthogKey: process.env.POSTHOG_KEY,

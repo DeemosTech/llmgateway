@@ -24,7 +24,7 @@
 		"dist/"
 	],
 	"scripts": {
-		"build": "rm -rf dist tsconfig.tsbuildinfo && tsc && resolve-tspaths",
+		"build": "rimraf dist tsconfig.tsbuildinfo && tsc && resolve-tspaths",
 		"dev": "tsc-watch --onSuccess 'resolve-tspaths'",
 		"format": "eslint --fix . && prettier --write .",
 		"lint": "eslint . && prettier --check ."
