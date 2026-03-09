@@ -33,6 +33,10 @@ const providerKeySchema = z.object({
 			azure_api_version: z.string().optional(),
 			azure_deployment_type: z.enum(["openai", "ai-foundry"]).optional(),
 			azure_validation_model: z.string().optional(),
+			google_vertex_project: z.string().optional(),
+			google_vertex_region: z.string().optional(),
+			proxy: z.boolean().optional(),
+			proxy_url: z.string().url().optional(),
 		})
 		.nullable(),
 	status: z.enum(["active", "inactive", "deleted"]).nullable(),
@@ -60,6 +64,10 @@ const createProviderKeySchema = z.object({
 			azure_api_version: z.string().optional(),
 			azure_deployment_type: z.enum(["openai", "ai-foundry"]).optional(),
 			azure_validation_model: z.string().optional(),
+			google_vertex_project: z.string().optional(),
+			google_vertex_region: z.string().optional(),
+			proxy: z.boolean().optional(),
+			proxy_url: z.string().url().optional(),
 		})
 		.optional(),
 	organizationId: z.string().min(1, "Organization ID is required"),
@@ -189,6 +197,7 @@ keysProvider.openapi(create, async (c) => {
 				baseUrl,
 				isTestEnv,
 				options,
+				options?.proxy ?? false,
 			);
 		}
 	} catch (error) {

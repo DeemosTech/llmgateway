@@ -24,7 +24,7 @@
 	"dependencies": {
 		"@llmgateway/db": "workspace:*",
 		"@llmgateway/logger": "workspace:*",
-		"@llmgateway/models": "workspace:*"
-	},
-	"devDependencies": {}
+		"@llmgateway/models": "workspace:*",
+		"undici": "7.22.0"
+	}
 }

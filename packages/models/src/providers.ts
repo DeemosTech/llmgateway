@@ -29,6 +29,11 @@ export interface ProviderDefinition {
 	// Priority weight for routing (default: 1). Lower values deprioritize the provider.
 	// e.g., 0.8 means 20% lower priority (score multiplied by 1/0.8 = 1.25)
 	priority?: number;
+	// Whether to use a proxy for requests to this provider by default
+	// If not specified, defaults to false
+	proxy?: boolean;
+	// Whether to hide the provider from the organization's provider keys UI
+	hidden?: boolean;
 }
 
 export const providers = [
@@ -47,6 +52,8 @@ export const providers = [
 		color: "#6366f1",
 		website: "https://llmgateway.io",
 		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 	{
 		id: "openai",
@@ -63,6 +70,8 @@ export const providers = [
 		color: "#0ea5e9",
 		website: "https://openai.com",
 		announcement: null,
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "anthropic",
@@ -79,6 +88,8 @@ export const providers = [
 		color: "#8b5cf6",
 		website: "https://anthropic.com",
 		announcement: null,
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "google-ai-studio",
@@ -96,6 +107,8 @@ export const providers = [
 		website: "https://ai.google.com",
 		announcement: null,
 		priority: 0.8,
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "google-vertex",
@@ -116,6 +129,8 @@ export const providers = [
 		color: "#4285f4",
 		website: "https://cloud.google.com/vertex-ai",
 		announcement: null,
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "obsidian",
@@ -132,6 +147,8 @@ export const providers = [
 		color: "#1a1a1a",
 		website: null,
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "groq",
@@ -147,6 +164,8 @@ export const providers = [
 		color: "#F55036",
 		website: "https://groq.com",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "cerebras",
@@ -163,6 +182,8 @@ export const providers = [
 		color: "#6b46c1",
 		website: "https://cerebras.ai",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "xai",
@@ -178,6 +199,25 @@ export const providers = [
 		color: "#000000",
 		website: "https://x.ai",
 		announcement: null,
+		proxy: true,
+		hidden: false,
+	},
+	{
+		id: "tuzi",
+		name: "Tu-Zi",
+		description: "Tu-Zi API Gateway",
+		env: {
+			required: {
+				apiKey: "LLM_TU-ZI_API_KEY",
+			},
+		},
+		streaming: true,
+		cancellation: true,
+		color: "#000000",
+		website: "https://api.tu-zi.com",
+		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 	{
 		id: "deepseek",
@@ -194,6 +234,8 @@ export const providers = [
 		color: "#FF6B00",
 		website: "https://deepseek.com",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "alibaba",
@@ -210,6 +252,8 @@ export const providers = [
 		color: "#FF6A00",
 		website: "https://www.alibabacloud.com",
 		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 	{
 		id: "novita",
@@ -225,6 +269,8 @@ export const providers = [
 		color: "#9333ea",
 		website: "https://novita.ai",
 		announcement: null,
+		proxy: true,
+		hidden: true,
 	},
 	{
 		id: "aws-bedrock",
@@ -248,6 +294,8 @@ export const providers = [
 		apiKeyInstructions:
 			"Use AWS Bedrock Long-Term API Keys (not IAM service account or private keys)",
 		learnMore: "https://docs.llmgateway.io/integrations/aws-bedrock",
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "azure",
@@ -273,6 +321,8 @@ export const providers = [
 		apiKeyInstructions:
 			"The resource name can be found in your Azure base URL: https://<resource-name>.openai.azure.com",
 		learnMore: "https://docs.llmgateway.io/integrations/azure",
+		proxy: true,
+		hidden: false,
 	},
 	{
 		id: "zai",
@@ -288,6 +338,8 @@ export const providers = [
 		color: "#22c55e",
 		website: "https://z.ai",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "moonshot",
@@ -303,6 +355,8 @@ export const providers = [
 		color: "#4B9EFF",
 		website: "https://moonshot.ai",
 		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 	{
 		id: "perplexity",
@@ -319,6 +373,8 @@ export const providers = [
 		color: "#20B2AA",
 		website: "https://perplexity.ai",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "nebius",
@@ -335,6 +391,8 @@ export const providers = [
 		color: "#3b82f6",
 		website: "https://nebius.com",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "mistral",
@@ -350,6 +408,8 @@ export const providers = [
 		color: "#FF7000",
 		website: "https://mistral.ai",
 		announcement: null,
+		proxy: false,
+		hidden: true,
 	},
 	{
 		id: "canopywave",
@@ -366,6 +426,8 @@ export const providers = [
 		color: "#10b981",
 		website: "https://canopywave.io",
 		announcement: null,
+		proxy: true,
+		hidden: true,
 	},
 	{
 		id: "inference.net",
@@ -382,6 +444,8 @@ export const providers = [
 		color: "#10b981",
 		website: "https://inference.net",
 		announcement: null,
+		proxy: true,
+		hidden: true,
 	},
 	{
 		id: "together.ai",
@@ -398,19 +462,8 @@ export const providers = [
 		color: "#ff6b35",
 		website: "https://together.ai",
 		announcement: null,
-	},
-	{
-		id: "custom",
-		name: "Custom",
-		description: "Custom OpenAI-compatible provider with configurable base URL",
-		env: {
-			required: {},
-		},
-		streaming: true,
-		cancellation: true,
-		color: "#6b7280",
-		website: null,
-		announcement: null,
+		proxy: true,
+		hidden: true,
 	},
 	{
 		id: "nanogpt",
@@ -426,6 +479,8 @@ export const providers = [
 		color: "#10b981",
 		website: "https://nano-gpt.com",
 		announcement: null,
+		proxy: true,
+		hidden: true,
 	},
 	{
 		id: "bytedance",
@@ -442,6 +497,8 @@ export const providers = [
 		color: "#FF4757",
 		website: "https://www.byteplus.com/en/product/modelark",
 		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 	{
 		id: "minimax",
@@ -458,6 +515,23 @@ export const providers = [
 		color: "#7C3AED",
 		website: "https://minimax.io",
 		announcement: null,
+		proxy: false,
+		hidden: false,
+	},
+	{
+		id: "custom",
+		name: "Custom",
+		description: "Custom OpenAI-compatible provider with configurable base URL",
+		env: {
+			required: {},
+		},
+		streaming: true,
+		cancellation: true,
+		color: "#6b7280",
+		website: null,
+		announcement: null,
+		proxy: false,
+		hidden: false,
 	},
 ] as const satisfies ProviderDefinition[];
 

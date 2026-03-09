@@ -3298,6 +3298,11 @@ export interface paths {
                                     /** @enum {string} */
                                     azure_deployment_type?: "openai" | "ai-foundry";
                                     azure_validation_model?: string;
+                                    google_vertex_project?: string;
+                                    google_vertex_region?: string;
+                                    proxy?: boolean;
+                                    /** Format: uri */
+                                    proxy_url?: string;
                                 } | null;
                                 /** @enum {string|null} */
                                 status: "active" | "inactive" | "deleted" | null;
@@ -3333,6 +3338,11 @@ export interface paths {
                             /** @enum {string} */
                             azure_deployment_type?: "openai" | "ai-foundry";
                             azure_validation_model?: string;
+                            google_vertex_project?: string;
+                            google_vertex_region?: string;
+                            proxy?: boolean;
+                            /** Format: uri */
+                            proxy_url?: string;
                         };
                         organizationId: string;
                     };
@@ -3361,6 +3371,11 @@ export interface paths {
                                     /** @enum {string} */
                                     azure_deployment_type?: "openai" | "ai-foundry";
                                     azure_validation_model?: string;
+                                    google_vertex_project?: string;
+                                    google_vertex_region?: string;
+                                    proxy?: boolean;
+                                    /** Format: uri */
+                                    proxy_url?: string;
                                 } | null;
                                 /** @enum {string|null} */
                                 status: "active" | "inactive" | "deleted" | null;
@@ -3477,6 +3492,11 @@ export interface paths {
                                     /** @enum {string} */
                                     azure_deployment_type?: "openai" | "ai-foundry";
                                     azure_validation_model?: string;
+                                    google_vertex_project?: string;
+                                    google_vertex_region?: string;
+                                    proxy?: boolean;
+                                    /** Format: uri */
+                                    proxy_url?: string;
                                 } | null;
                                 /** @enum {string|null} */
                                 status: "active" | "inactive" | "deleted" | null;
@@ -6668,6 +6688,7 @@ export interface operations {
                             announcement: string | null;
                             /** @enum {string} */
                             status: "active" | "inactive";
+                            hidden: boolean;
                         }[];
                     };
                 };

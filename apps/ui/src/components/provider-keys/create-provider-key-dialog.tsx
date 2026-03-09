@@ -72,6 +72,10 @@ export function CreateProviderKeyDialog({
 	>("ai-foundry");
 	const [azureValidationModel, setAzureValidationModel] =
 		useState("gpt-4o-mini");
+	const [googleVertexProject, setGoogleVertexProject] = useState("");
+	const [googleVertexRegion, setGoogleVertexRegion] = useState("");
+	const [useProxy, setUseProxy] = useState(false);
+	const [proxyUrl, setProxyUrl] = useState("");
 	const [isValidating, setIsValidating] = useState(false);
 
 	const api = useApi();
@@ -86,7 +90,7 @@ export function CreateProviderKeyDialog({
 	);
 
 	const availableProviders = providers.filter((provider) => {
-		if (provider.id === "llmgateway") {
+		if (provider.id === "llmgateway" || provider.hidden) {
 			return false;
 		}
 
@@ -161,6 +165,10 @@ export function CreateProviderKeyDialog({
 				azure_api_version?: string;
 				azure_deployment_type?: "openai" | "ai-foundry";
 				azure_validation_model?: string;
+				google_vertex_project?: string;
+				google_vertex_region?: string;
+				proxy?: boolean;
+				proxy_url?: string;
 			};
 			organizationId: string;
 		} = {
@@ -175,9 +183,16 @@ export function CreateProviderKeyDialog({
 			payload.name = customName;
 		}
 		if (selectedProvider === "aws-bedrock") {
-			payload.options = {
+			const options: any = {
 				aws_bedrock_region_prefix: awsBedrockRegionPrefix,
 			};
+			if (useProxy) {
+				options.proxy = useProxy;
+				if (proxyUrl) {
+					options.proxy_url = proxyUrl;
+				}
+			}
+			payload.options = options;
 		}
 		if (selectedProvider === "azure") {
 			if (!azureResource) {
@@ -188,12 +203,55 @@ export function CreateProviderKeyDialog({
 				});
 				return;
 			}
-			payload.options = {
+			const options: any = {
 				azure_resource: azureResource,
 				azure_api_version: azureApiVersion,
 				azure_deployment_type: azureDeploymentType,
 				azure_validation_model: azureValidationModel,
 			};
+			if (useProxy) {
+				options.proxy = useProxy;
+				if (proxyUrl) {
+					options.proxy_url = proxyUrl;
+				}
+			}
+			payload.options = options;
+		}
+		if (selectedProvider === "google-vertex") {
+			if (!googleVertexProject) {
+				toast({
+					title: "Error",
+					description: "Google Cloud project ID is required for Vertex AI",
+					variant: "destructive",
+				});
+				return;
+			}
+			const options: any = {
+				google_vertex_project: googleVertexProject,
+				google_vertex_region: googleVertexRegion || undefined,
+			};
+			if (useProxy) {
+				options.proxy = useProxy;
+				if (proxyUrl) {
+					options.proxy_url = proxyUrl;
+				}
+			}
+			payload.options = options;
+		}
+		// For all other providers, just set proxy option if specified
+		if (!payload.options && useProxy) {
+			const options: any = {
+				proxy: useProxy,
+			};
+			if (proxyUrl) {
+				options.proxy_url = proxyUrl;
+			}
+			payload.options = options;
+		} else if (payload.options && useProxy) {
+			payload.options.proxy = useProxy;
+			if (proxyUrl) {
+				payload.options.proxy_url = proxyUrl;
+			}
 		}
 
 		setIsValidating(true);
@@ -231,6 +289,10 @@ export function CreateProviderKeyDialog({
 			setAzureApiVersion("2024-10-21");
 			setAzureDeploymentType("ai-foundry");
 			setAzureValidationModel("gpt-4o-mini");
+			setGoogleVertexProject("");
+			setGoogleVertexRegion("");
+			setUseProxy(false);
+			setProxyUrl("");
 		}, 300);
 	};
 
@@ -304,6 +366,25 @@ export function CreateProviderKeyDialog({
 								</p>
 							);
 						})()}
+					</div>
+
+					<div className="space-y-2">
+						<div className="flex items-center justify-between">
+							<Label htmlFor="use-proxy">Use Proxy</Label>
+							<button
+								type="button"
+								onClick={() => setUseProxy(!useProxy)}
+								className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+									useProxy ? "bg-indigo-600" : "bg-gray-200"
+								}`}
+							>
+								<span
+									className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+										useProxy ? "translate-x-5" : "translate-x-0"
+									}`}
+								/>
+							</button>
+						</div>
 					</div>
 
 					{selectedProvider === "llmgateway" && (
@@ -445,6 +526,55 @@ export function CreateProviderKeyDialog({
 								/>
 							</div>
 						</>
+					)}
+
+					{selectedProvider === "google-vertex" && (
+						<>
+							<div className="space-y-2">
+								<Label htmlFor="google-vertex-project">
+									Google Cloud Project ID
+								</Label>
+								<Input
+									id="google-vertex-project"
+									type="text"
+									placeholder="my-gcp-project"
+									value={googleVertexProject}
+									onChange={(e) => setGoogleVertexProject(e.target.value)}
+									required
+								/>
+								<p className="text-sm text-muted-foreground">
+									Your Google Cloud project ID (e.g., my-gcp-project-123456)
+								</p>
+							</div>
+							<div className="space-y-2">
+								<Label htmlFor="google-vertex-region">
+									Google Cloud Region
+								</Label>
+								<Input
+									id="google-vertex-region"
+									type="text"
+									placeholder="us-central1"
+									value={googleVertexRegion}
+									onChange={(e) => setGoogleVertexRegion(e.target.value)}
+								/>
+								<p className="text-sm text-muted-foreground">
+									Google Cloud region (default: global)
+								</p>
+							</div>
+						</>
+					)}
+
+					{useProxy && (
+						<div className="space-y-2">
+							<Label htmlFor="proxy-url">Proxy URL</Label>
+							<Input
+								id="proxy-url"
+								type="url"
+								placeholder="https://proxy.example.com:8080"
+								value={proxyUrl}
+								onChange={(e) => setProxyUrl(e.target.value)}
+							/>
+						</div>
 					)}
 
 					<DialogFooter>

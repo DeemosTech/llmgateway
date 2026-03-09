@@ -3,6 +3,7 @@ import { encode } from "gpt-tokenizer";
 import { HTTPException } from "hono/http-exception";
 import { streamSSE } from "hono/streaming";
 
+import { createProxyAgent } from "@/chat/tools/create-proxy-agent.js";
 import { validateSource } from "@/chat/tools/validate-source.js";
 import { reportKeyError, reportKeySuccess } from "@/lib/api-key-health.js";
 import {
@@ -64,6 +65,7 @@ import {
 	type ProviderRequestBody,
 	providers,
 	type WebSearchTool,
+	getProviderDefinition,
 } from "@llmgateway/models";
 
 import { completionsRequestSchema } from "./schemas/completions.js";
@@ -713,7 +715,7 @@ chat.openapi(completions, async (c) => {
 			// Check which providers have environment tokens available
 			const envProviders: string[] = [];
 			const supportedProviders = providers
-				.filter((p) => p.id !== "llmgateway")
+				.filter((p) => p.id !== "llmgateway" && !p.hidden)
 				.map((p) => p.id);
 			for (const provider of supportedProviders) {
 				if (hasProviderEnvironmentToken(provider as Provider)) {
@@ -769,12 +771,15 @@ chat.openapi(completions, async (c) => {
 			const candidateAllowedProviders = candidateIam.allowedProviders;
 
 			// Check if any of the model's providers are available
-			const availableModelProviders = modelDef.providers.filter(
-				(provider) =>
+			const availableModelProviders = modelDef.providers.filter((provider) => {
+				const providerDef = getProviderDefinition(provider.providerId);
+				return (
 					availableProviders.includes(provider.providerId) &&
 					(!candidateAllowedProviders ||
-						candidateAllowedProviders.includes(provider.providerId)),
-			);
+						candidateAllowedProviders.includes(provider.providerId)) &&
+					!providerDef?.hidden
+				);
+			});
 
 			// Filter by context size requirement, reasoning capability, and deprecation status
 			const suitableProviders = availableModelProviders.filter((provider) => {
@@ -1566,25 +1571,6 @@ chat.openapi(completions, async (c) => {
 		);
 	}
 
-	// Check if organization has credits for data retention costs
-	// Data storage is billed at $0.01 per 1M tokens, so we need credits when retention is enabled
-	if (organization && organization.retentionLevel === "retain") {
-		const regularCredits = parseFloat(organization.credits ?? "0");
-		const devPlanCreditsRemaining =
-			organization.devPlan !== "none"
-				? parseFloat(organization.devPlanCreditsLimit ?? "0") -
-					parseFloat(organization.devPlanCreditsUsed ?? "0")
-				: 0;
-		const totalAvailableCredits = regularCredits + devPlanCreditsRemaining;
-
-		if (totalAvailableCredits <= 0) {
-			throw new HTTPException(402, {
-				message:
-					"Organization has insufficient credits for data retention. Data retention requires credits for storage costs ($0.01 per 1M tokens). Please add credits or disable data retention in organization settings.",
-			});
-		}
-	}
-
 	if (!usedToken) {
 		throw new HTTPException(500, {
 			message: `No token`,
@@ -1635,6 +1621,15 @@ chat.openapi(completions, async (c) => {
 		throw new HTTPException(500, {
 			message: `Could not use provider: ${usedProvider}. ${error instanceof Error ? error.message : ""}`,
 		});
+	}
+
+	let useProxy: boolean | undefined =
+		getProviderDefinition(usedProvider)?.proxy;
+	if (providerKey?.options?.proxy === true) {
+		useProxy = true;
+	}
+	if (useProxy !== false && useProxy !== true) {
+		useProxy = false;
 	}
 
 	let useResponsesApi = url?.includes("/responses") ?? false;
@@ -2414,6 +2409,7 @@ chat.openapi(completions, async (c) => {
 							top_p = ctx.top_p;
 							frequency_penalty = ctx.frequency_penalty;
 							presence_penalty = ctx.presence_penalty;
+							useProxy = ctx.useProxy;
 						} catch {
 							failedProviderIds.add(nextProvider.providerId);
 							// Don't consume a retry slot for context-resolution failures
@@ -2452,12 +2448,17 @@ chat.openapi(completions, async (c) => {
 							requestCanBeCanceled ? controller : undefined,
 						);
 
-						res = await fetch(url, {
+						const dispatcher = createProxyAgent(url, useProxy, providerKey);
+						const fetchOptions: RequestInit & { dispatcher?: any } = {
 							method: "POST",
 							headers,
 							body: JSON.stringify(requestBody),
 							signal: fetchSignal,
-						});
+						};
+						if (dispatcher) {
+							fetchOptions.dispatcher = dispatcher;
+						}
+						res = await fetch(url, fetchOptions);
 					} catch (error) {
 						// Clean up the event listeners
 						c.req.raw.signal.removeEventListener("abort", onAbort);
@@ -5011,6 +5012,7 @@ chat.openapi(completions, async (c) => {
 				top_p = ctx.top_p;
 				frequency_penalty = ctx.frequency_penalty;
 				presence_penalty = ctx.presence_penalty;
+				useProxy = ctx.useProxy;
 			} catch {
 				failedProviderIds.add(nextProvider.providerId);
 				// Don't consume a retry slot for context-resolution failures
@@ -5056,12 +5058,17 @@ chat.openapi(completions, async (c) => {
 				requestCanBeCanceled ? controller : undefined,
 			);
 
-			res = await fetch(url, {
+			const dispatcher = createProxyAgent(url, useProxy, providerKey);
+			const fetchOptions: RequestInit & { dispatcher?: any } = {
 				method: "POST",
 				headers,
 				body: JSON.stringify(requestBody),
 				signal: fetchSignal,
-			});
+			};
+			if (dispatcher) {
+				fetchOptions.dispatcher = dispatcher;
+			}
+			res = await fetch(url, fetchOptions);
 		} catch (error) {
 			// Check for timeout error first (AbortSignal.timeout throws TimeoutError)
 			if (isTimeoutError(error)) {

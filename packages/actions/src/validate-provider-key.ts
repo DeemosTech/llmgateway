@@ -7,6 +7,7 @@ import {
 	type ProviderValidationResult,
 } from "@llmgateway/models";
 
+import { createProxyAgent } from "./create-proxy-agent.js";
 import { getCheapestModelForProvider } from "./get-cheapest-model-for-provider.js";
 import { getProviderEndpoint } from "./get-provider-endpoint.js";
 import { getProviderHeaders } from "./get-provider-headers.js";
@@ -23,6 +24,7 @@ export async function validateProviderKey(
 	baseUrl?: string,
 	skipValidation = false,
 	providerKeyOptions?: ProviderKeyOptions,
+	useProxy = false,
 ): Promise<ProviderValidationResult> {
 	// Skip validation if requested (e.g. in test environment)
 	if (skipValidation) {
@@ -45,7 +47,7 @@ export async function validateProviderKey(
 				validationModel,
 			});
 		} else if (provider === "openai") {
-			validationModel = "gpt-4o-mini";
+			validationModel = "gpt-5-nano";
 			logger.debug("Using fixed OpenAI validation model", {
 				provider,
 				validationModel,
@@ -164,13 +166,21 @@ export async function validateProviderKey(
 			provider,
 			model: validationModel,
 			endpoint,
+			useProxy,
+			providerKeyOptions,
 		});
 
-		const response = await fetch(endpoint, {
+		const dispatcher = createProxyAgent(endpoint, useProxy, providerKeyOptions);
+		const fetchOptions: RequestInit & { dispatcher?: any } = {
 			method: "POST",
 			headers,
 			body: JSON.stringify(payload),
-		});
+		};
+		if (dispatcher) {
+			fetchOptions.dispatcher = dispatcher;
+		}
+
+		const response = await fetch(endpoint, fetchOptions);
 
 		if (!response.ok) {
 			const errorText = await response.text();

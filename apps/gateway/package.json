@@ -45,6 +45,7 @@
 		"hono-openapi": "^1.1.1",
 		"ioredis": "5.7.0",
 		"redis": "5.9.0",
+		"undici": "7.22.0",
 		"worker": "workspace:*",
 		"zod": "3.25.75",
 		"zod-openapi": "^5.4.3"
