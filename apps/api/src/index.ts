@@ -217,7 +217,7 @@ app.openapi(root, async (c) => {
 });
 
 // Create the /api prefixed router
-const api = new OpenAPIHono<ServerTypes>();
+export const api = new OpenAPIHono<ServerTypes>();
 
 api.route("/stripe", stripeRoutes);
 
