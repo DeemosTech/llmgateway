@@ -1,11 +1,11 @@
 import { writeFileSync } from "fs";
 
-import { app, config } from "@/index.js";
+import { api, config } from "@/index.js";
 
 import { logger } from "@llmgateway/logger";
 
 async function generateOpenAPI() {
-	const spec = app.getOpenAPIDocument(config);
+	const spec = api.getOpenAPIDocument(config);
 
 	writeFileSync("openapi.json", JSON.stringify(spec, null, 2));
 	logger.info("openapi.json has been generated");
