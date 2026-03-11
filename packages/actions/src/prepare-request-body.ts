@@ -17,6 +17,117 @@ import {
 import { transformAnthropicMessages } from "./transform-anthropic-messages.js";
 import { transformGoogleMessages } from "./transform-google-messages.js";
 
+export interface VideoRequestConfig {
+	aspect_ratio?: "16:9" | "9:16";
+	duration?: number;
+	resolution?: "720p" | "1080p";
+	input_reference?: string;
+	sample_count?: number;
+	generate_audio?: boolean;
+	negative_prompt?: string;
+	person_generation?: "allow_adult" | "dont_allow";
+	seed?: number;
+	storage_uri?: string;
+}
+
+export interface PreparedVideoRequest {
+	body: BodyInit | Record<string, unknown>;
+	headers?: Record<string, string>;
+}
+
+function mapVideoSizeForOpenAI(config: VideoRequestConfig): string {
+	if (config.aspect_ratio === "16:9") {
+		return config.resolution === "1080p" ? "1792x1024" : "1280x720";
+	}
+	return config.resolution === "1080p" ? "1024x1792" : "720x1280";
+}
+
+export function prepareVideoRequestBody(
+	usedProvider: ProviderId,
+	usedModel: string,
+	prompt: string,
+	config: VideoRequestConfig,
+): PreparedVideoRequest {
+	switch (usedProvider) {
+		case "tuzi":
+		case "openai": {
+			const formData = new FormData();
+			formData.set("model", usedModel);
+			formData.set("prompt", prompt);
+			formData.set("seconds", String(config.duration ?? 4));
+			formData.set("size", mapVideoSizeForOpenAI(config));
+			if (config.input_reference) {
+				formData.set("input_reference", config.input_reference);
+			}
+
+			return {
+				body: formData,
+			};
+		}
+		case "google-ai-studio":
+			return {
+				body: {
+					model: usedModel,
+					prompt,
+					config: {
+						aspectRatio: config.aspect_ratio,
+						durationSeconds: config.duration,
+						resolution: config.resolution,
+						numberOfVideos: config.sample_count,
+						generateAudio: config.generate_audio,
+						personGeneration: config.person_generation,
+						...(config.negative_prompt && {
+							negativePrompt: config.negative_prompt,
+						}),
+						...(config.seed !== undefined && {
+							seed: config.seed,
+						}),
+					},
+				},
+				headers: {
+					"Content-Type": "application/json",
+				},
+			};
+		case "google-vertex":
+			return {
+				body: {
+					instances: [
+						{
+							prompt,
+						},
+					],
+					parameters: {
+						aspectRatio: config.aspect_ratio,
+						durationSeconds: config.duration,
+						sampleResolution: config.resolution,
+						sampleCount: config.sample_count,
+						generateAudio: config.generate_audio,
+						personGeneration: config.person_generation,
+						...(config.negative_prompt && {
+							negativePrompt: config.negative_prompt,
+						}),
+						...(config.seed !== undefined && {
+							seed: config.seed,
+						}),
+						...(config.storage_uri && {
+							storageUri: config.storage_uri,
+						}),
+					},
+				},
+				headers: {
+					"Content-Type": "application/json",
+				},
+			};
+		default:
+			return {
+				body: {
+					model: usedModel,
+					prompt,
+				},
+			};
+	}
+}
+
 /**
  * Type guard to check if a tool is a function tool
  */
@@ -673,6 +784,8 @@ export async function prepareRequestBody(
 
 	switch (usedProvider) {
 		case "azure":
+		case "alibaba":
+		case "bytedance":
 		case "openai": {
 			// Determine whether to use Responses API format.
 			// If useResponsesApi is explicitly passed (derived from endpoint URL), use it.
@@ -706,7 +819,7 @@ export async function prepareRequestBody(
 					input: transformedMessages,
 					reasoning: {
 						effort: reasoning_effort ?? defaultEffort,
-						summary: "detailed",
+						summary: usedProvider === "openai" ? "detailed" : undefined,
 					},
 				};
 

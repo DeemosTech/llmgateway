@@ -227,7 +227,7 @@ export interface OpenAIResponsesRequestBody {
 	input: OpenAIResponsesInputItem[];
 	reasoning: {
 		effort: "minimal" | "low" | "medium" | "high" | "xhigh";
-		summary: "detailed";
+		summary: "detailed" | undefined;
 	};
 	tools?: Array<{
 		type: "function";

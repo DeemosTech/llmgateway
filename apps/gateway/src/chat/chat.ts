@@ -5,6 +5,8 @@ import { streamSSE } from "hono/streaming";
 
 import { createProxyAgent } from "@/chat/tools/create-proxy-agent.js";
 import { validateSource } from "@/chat/tools/validate-source.js";
+import { executeNonStreamingAttempt } from "@/common/execute-non-streaming-attempt.js";
+import { processNonStreamingProviderResponse } from "@/common/process-non-streaming-provider-response.js";
 import { reportKeyError, reportKeySuccess } from "@/lib/api-key-health.js";
 import {
 	findApiKeyByToken,
@@ -20,7 +22,6 @@ import { calculateCosts, shouldBillCancelledRequests } from "@/lib/costs.js";
 import { throwIamException, validateModelAccess } from "@/lib/iam.js";
 import { calculateDataStorageCost, insertLog } from "@/lib/logs.js";
 import {
-	createCombinedSignal,
 	createStreamingCombinedSignal,
 	isTimeoutError,
 } from "@/lib/timeout-config.js";
@@ -69,7 +70,6 @@ import {
 } from "@llmgateway/models";
 
 import { completionsRequestSchema } from "./schemas/completions.js";
-import { convertImagesToBase64 } from "./tools/convert-images-to-base64.js";
 import { countInputImages } from "./tools/count-input-images.js";
 import { createLogEntry } from "./tools/create-log-entry.js";
 import { estimateTokensFromContent } from "./tools/estimate-tokens-from-content.js";
@@ -88,7 +88,6 @@ import { messagesContainImages } from "./tools/messages-contain-images.js";
 import { mightBeCompleteJson } from "./tools/might-be-complete-json.js";
 import { convertAwsEventStreamToSSE } from "./tools/parse-aws-eventstream.js";
 import { parseModelInput } from "./tools/parse-model-input.js";
-import { parseProviderResponse } from "./tools/parse-provider-response.js";
 import { resolveModelInfo } from "./tools/resolve-model-info.js";
 import { resolveProviderContext } from "./tools/resolve-provider-context.js";
 import {
@@ -4913,29 +4912,13 @@ chat.openapi(completions, async (c) => {
 	}
 
 	// Handle non-streaming response
-	const controller = new AbortController();
-	// Set up a listener for the request being aborted
-	const onAbort = () => {
-		if (requestCanBeCanceled) {
-			controller.abort();
-		}
-	};
-
-	// Add event listener for the 'close' event on the connection
-	c.req.raw.signal.addEventListener("abort", onAbort);
-
 	// --- Retry loop for provider fallback ---
 	const routingAttempts: RoutingAttempt[] = [];
 	const failedProviderIds = new Set<string>();
-	let canceled = false;
-	let fetchError: Error | null = null;
-	let isTimeoutFetchError = false;
 	let res: Response | undefined;
 	let duration = 0;
 	const finalLogId = shortid();
 	for (let retryAttempt = 0; retryAttempt <= MAX_RETRIES; retryAttempt++) {
-		const perAttemptStartTime = Date.now();
-
 		// Type guard: narrow variables that TypeScript widens due to loop reassignment
 		if (
 			!usedProvider ||
@@ -4948,9 +4931,6 @@ chat.openapi(completions, async (c) => {
 		}
 
 		if (retryAttempt > 0) {
-			// Re-add abort listener (finally block removes it)
-			c.req.raw.signal.addEventListener("abort", onAbort);
-
 			const nextProvider = selectNextProvider(
 				routingMetadata?.providerScores ?? [],
 				failedProviderIds,
@@ -5026,95 +5006,118 @@ chat.openapi(completions, async (c) => {
 			}
 		}
 
-		// Reset per-attempt state
-		canceled = false;
-		fetchError = null;
-		isTimeoutFetchError = false;
-		res = undefined;
+		const attemptHeaders = getProviderHeaders(usedProvider, usedToken, {
+			webSearchEnabled: !!webSearchTool,
+		});
+		attemptHeaders["Content-Type"] = "application/json";
 
-		try {
-			const headers = getProviderHeaders(usedProvider, usedToken, {
-				webSearchEnabled: !!webSearchTool,
-			});
-			headers["Content-Type"] = "application/json";
-
-			// Add effort beta header for Anthropic if effort parameter is specified
-			if (usedProvider === "anthropic" && effort !== undefined) {
-				const currentBeta = headers["anthropic-beta"];
-				headers["anthropic-beta"] = currentBeta
-					? `${currentBeta},effort-2025-11-24`
-					: "effort-2025-11-24";
-			}
-
-			// Add structured outputs beta header for Anthropic if json_schema response_format is specified
-			if (
-				usedProvider === "anthropic" &&
-				response_format?.type === "json_schema"
-			) {
-				const currentBeta = headers["anthropic-beta"];
-				headers["anthropic-beta"] = currentBeta
-					? `${currentBeta},structured-outputs-2025-11-13`
-					: "structured-outputs-2025-11-13";
-			}
-
-			// Create a combined signal for both timeout and cancellation
-			// Non-streaming requests use a shorter timeout (default 80s)
-			const fetchSignal = createCombinedSignal(
-				requestCanBeCanceled ? controller : undefined,
-			);
-
-			const dispatcher = createProxyAgent(url, useProxy, providerKey);
-			const fetchOptions: RequestInit & { dispatcher?: any } = {
-				method: "POST",
-				headers,
-				body: JSON.stringify(requestBody),
-				signal: fetchSignal,
-			};
-			if (dispatcher) {
-				fetchOptions.dispatcher = dispatcher;
-			}
-			res = await fetch(url, fetchOptions);
-		} catch (error) {
-			// Check for timeout error first (AbortSignal.timeout throws TimeoutError)
-			if (isTimeoutError(error)) {
-				// Capture timeout as a fetch error for logging
-				fetchError =
-					error instanceof Error ? error : new Error("Request timeout");
-				isTimeoutFetchError = true;
-			} else if (error instanceof Error && error.name === "AbortError") {
-				canceled = true;
-			} else if (error instanceof Error) {
-				// Capture fetch errors (connection failures, etc.)
-				fetchError = error;
-			} else {
-				throw error;
-			}
-		} finally {
-			// Clean up the event listener
-			c.req.raw.signal.removeEventListener("abort", onAbort);
+		if (usedProvider === "anthropic" && effort !== undefined) {
+			const currentBeta = attemptHeaders["anthropic-beta"];
+			attemptHeaders["anthropic-beta"] = currentBeta
+				? `${currentBeta},effort-2025-11-24`
+				: "effort-2025-11-24";
 		}
 
-		const perAttemptDuration = Date.now() - perAttemptStartTime;
+		if (
+			usedProvider === "anthropic" &&
+			response_format?.type === "json_schema"
+		) {
+			const currentBeta = attemptHeaders["anthropic-beta"];
+			attemptHeaders["anthropic-beta"] = currentBeta
+				? `${currentBeta},structured-outputs-2025-11-13`
+				: "structured-outputs-2025-11-13";
+		}
+
+		const attemptResult = await executeNonStreamingAttempt({
+			requestSignal: c.req.raw.signal,
+			resolvedContext: {
+				usedProvider,
+				usedModel,
+				usedModelFormatted,
+				usedModelMapping,
+				baseModelName,
+				usedToken,
+				providerKey,
+				configIndex,
+				envVarName,
+				url,
+				requestBody,
+				useResponsesApi,
+				requestCanBeCanceled,
+				isImageGeneration,
+				supportsReasoning,
+				temperature,
+				max_tokens,
+				top_p,
+				frequency_penalty,
+				presence_penalty,
+				headers: attemptHeaders,
+				useProxy,
+			},
+			upstreamRequestBody: requestBody,
+			createBaseLogEntry: (rawResponse: unknown, upstreamResponse: unknown) =>
+				createLogEntry(
+					requestId,
+					project,
+					apiKey,
+					providerKey?.id,
+					usedModelFormatted!,
+					usedModelMapping!,
+					usedProvider!,
+					initialRequestedModel,
+					requestedProvider,
+					messages,
+					temperature,
+					max_tokens,
+					top_p,
+					frequency_penalty,
+					presence_penalty,
+					reasoning_effort,
+					reasoning_max_tokens,
+					effort,
+					response_format,
+					tools,
+					tool_choice,
+					source,
+					customHeaders,
+					debugMode,
+					userAgent,
+					image_config,
+					routingMetadata,
+					rawBody,
+					rawResponse,
+					requestBody,
+					upstreamResponse,
+					plugins?.map((p) => p.id) ?? [],
+					undefined,
+				),
+			messages: messages as BaseMessage[],
+			inputImageCount,
+			webSearchEnabled: !!webSearchTool,
+			organizationId: project.organizationId,
+			retentionLevel,
+			getRetryMetadata: ({ statusCode }: { statusCode: number }) => {
+				const retried = shouldRetryRequest({
+					requestedProvider,
+					noFallback,
+					statusCode,
+					retryCount: retryAttempt,
+					remainingProviders:
+						(routingMetadata?.providerScores.length ?? 0) -
+						failedProviderIds.size -
+						1,
+					usedProvider: usedProvider!,
+				});
+				return {
+					retried,
+					retriedByLogId: retried ? finalLogId : null,
+				};
+			},
+		});
+
 		duration = Date.now() - startTime;
 
-		// Handle fetch errors (timeout, connection failures, etc.)
-		if (fetchError) {
-			const errorMessage = fetchError.message;
-			const nonStreamingFetchCause = extractErrorCause(fetchError);
-			logger.warn("Fetch error", {
-				error: errorMessage,
-				cause: nonStreamingFetchCause,
-				usedProvider,
-				requestedProvider,
-				usedModel,
-				initialRequestedModel,
-			});
-
-			// Log the error in the database
-			// Extract plugin IDs for logging (non-streaming fetch error)
-			const nonStreamingFetchErrorPluginIds = plugins?.map((p) => p.id) ?? [];
-
-			// Check if we should retry before logging so we can mark the log as retried
+		if (attemptResult.type === "fetch_error") {
 			const willRetryFetchNonStreaming = shouldRetryRequest({
 				requestedProvider,
 				noFallback,
@@ -5126,87 +5129,6 @@ chat.openapi(completions, async (c) => {
 					1,
 				usedProvider,
 			});
-
-			const baseLogEntry = createLogEntry(
-				requestId,
-				project,
-				apiKey,
-				providerKey?.id,
-				usedModelFormatted,
-				usedModelMapping,
-				usedProvider,
-				initialRequestedModel,
-				requestedProvider,
-				messages,
-				temperature,
-				max_tokens,
-				top_p,
-				frequency_penalty,
-				presence_penalty,
-				reasoning_effort,
-				reasoning_max_tokens,
-				effort,
-				response_format,
-				tools,
-				tool_choice,
-				source,
-				customHeaders,
-				debugMode,
-				userAgent,
-				image_config,
-				routingMetadata,
-				rawBody,
-				null, // No response for fetch error
-				requestBody, // The request that resulted in error
-				null, // No upstream response for fetch error
-				nonStreamingFetchErrorPluginIds,
-				undefined, // No plugin results for error case
-			);
-
-			await insertLog({
-				...baseLogEntry,
-				duration: perAttemptDuration,
-				timeToFirstToken: null, // Not applicable for error case
-				timeToFirstReasoningToken: null, // Not applicable for error case
-				responseSize: 0,
-				content: null,
-				reasoningContent: null,
-				finishReason: "upstream_error",
-				promptTokens: null,
-				completionTokens: null,
-				totalTokens: null,
-				reasoningTokens: null,
-				cachedTokens: null,
-				hasError: true,
-				streamed: false,
-				canceled: false,
-				errorDetails: {
-					statusCode: 0,
-					statusText: fetchError.name,
-					responseText: errorMessage,
-					cause: nonStreamingFetchCause,
-				},
-				cachedInputCost: null,
-				requestCost: null,
-				webSearchCost: null,
-				imageInputTokens: null,
-				imageOutputTokens: null,
-				imageInputCost: null,
-				imageOutputCost: null,
-				estimatedCost: false,
-				discount: null,
-				dataStorageCost: "0",
-				cached: false,
-				toolResults: null,
-				retried: willRetryFetchNonStreaming,
-				retriedByLogId: willRetryFetchNonStreaming ? finalLogId : null,
-			});
-
-			// Report key health for environment-based tokens
-			if (envVarName !== undefined) {
-				reportKeyError(envVarName, configIndex, 0);
-			}
-
 			if (willRetryFetchNonStreaming) {
 				routingAttempts.push({
 					provider: usedProvider,
@@ -5219,156 +5141,28 @@ chat.openapi(completions, async (c) => {
 				continue;
 			}
 
-			// Return error response - use 504 for timeouts, 502 for other connection failures
 			return c.json(
 				{
 					error: {
-						message: isTimeoutFetchError
-							? `Upstream provider timeout: ${errorMessage}`
-							: `Failed to connect to provider: ${errorMessage}`,
-						type: isTimeoutFetchError ? "upstream_timeout" : "upstream_error",
+						message: attemptResult.isTimeout
+							? `Upstream provider timeout: ${attemptResult.message}`
+							: `Failed to connect to provider: ${attemptResult.message}`,
+						type: attemptResult.isTimeout
+							? "upstream_timeout"
+							: "upstream_error",
 						param: null,
-						code: isTimeoutFetchError ? "timeout" : "fetch_failed",
+						code: attemptResult.isTimeout ? "timeout" : "fetch_failed",
 						requestedProvider,
 						usedProvider,
 						requestedModel: initialRequestedModel,
 						usedModel,
 					},
 				},
-				isTimeoutFetchError ? 504 : 502,
+				attemptResult.isTimeout ? 504 : 502,
 			);
 		}
 
-		// If the request was canceled, log it and return a response
-		if (canceled) {
-			// Log the canceled request
-			// Extract plugin IDs for logging (canceled non-streaming)
-			const canceledNonStreamingPluginIds = plugins?.map((p) => p.id) ?? [];
-
-			// Calculate costs for cancelled request if billing is enabled
-			const billCancelled = shouldBillCancelledRequests();
-			let cancelledCosts: Awaited<ReturnType<typeof calculateCosts>> | null =
-				null;
-			let estimatedPromptTokens: number | null = null;
-
-			if (billCancelled) {
-				// Estimate prompt tokens from messages
-				const tokenEstimation = estimateTokens(
-					usedProvider,
-					messages,
-					null,
-					null,
-					null,
-				);
-				estimatedPromptTokens = tokenEstimation.calculatedPromptTokens;
-
-				// Calculate costs based on prompt tokens only (no completion for non-streaming cancel)
-				// If web search tool was enabled, count it as 1 search for billing
-				cancelledCosts = await calculateCosts(
-					usedModel,
-					usedProvider,
-					estimatedPromptTokens,
-					0, // No completion tokens
-					null, // No cached tokens
-					{
-						prompt: messages
-							.map((m) => messageContentToString(m.content))
-							.join("\n"),
-						completion: "",
-					},
-					null, // No reasoning tokens
-					0, // No output images
-					undefined,
-					inputImageCount,
-					webSearchTool ? 1 : null, // Bill for web search if it was enabled
-					project.organizationId,
-				);
-			}
-
-			const baseLogEntry = createLogEntry(
-				requestId,
-				project,
-				apiKey,
-				providerKey?.id,
-				usedModelFormatted,
-				usedModelMapping,
-				usedProvider,
-				initialRequestedModel,
-				requestedProvider,
-				messages,
-				temperature,
-				max_tokens,
-				top_p,
-				frequency_penalty,
-				presence_penalty,
-				reasoning_effort,
-				reasoning_max_tokens,
-				effort,
-				response_format,
-				tools,
-				tool_choice,
-				source,
-				customHeaders,
-				debugMode,
-				userAgent,
-				image_config,
-				routingMetadata,
-				rawBody,
-				null, // No response for canceled request
-				requestBody, // The request that was prepared before cancellation
-				null, // No upstream response for canceled request
-				canceledNonStreamingPluginIds,
-				undefined, // No plugin results for canceled request
-			);
-
-			await insertLog({
-				...baseLogEntry,
-				duration,
-				timeToFirstToken: null, // Not applicable for canceled request
-				timeToFirstReasoningToken: null, // Not applicable for canceled request
-				responseSize: 0,
-				content: null,
-				reasoningContent: null,
-				finishReason: "canceled",
-				promptTokens: billCancelled
-					? (cancelledCosts?.promptTokens ?? estimatedPromptTokens)?.toString()
-					: null,
-				completionTokens: billCancelled ? "0" : null,
-				totalTokens: billCancelled
-					? (cancelledCosts?.promptTokens ?? estimatedPromptTokens)?.toString()
-					: null,
-				reasoningTokens: null,
-				cachedTokens: null,
-				hasError: false,
-				streamed: false,
-				canceled: true,
-				errorDetails: null,
-				inputCost: cancelledCosts?.inputCost ?? null,
-				outputCost: cancelledCosts?.outputCost ?? null,
-				cachedInputCost: cancelledCosts?.cachedInputCost ?? null,
-				requestCost: cancelledCosts?.requestCost ?? null,
-				webSearchCost: cancelledCosts?.webSearchCost ?? null,
-				imageInputTokens: cancelledCosts?.imageInputTokens?.toString() ?? null,
-				imageOutputTokens:
-					cancelledCosts?.imageOutputTokens?.toString() ?? null,
-				imageInputCost: cancelledCosts?.imageInputCost ?? null,
-				imageOutputCost: cancelledCosts?.imageOutputCost ?? null,
-				cost: cancelledCosts?.totalCost ?? null,
-				estimatedCost: cancelledCosts?.estimatedCost ?? false,
-				discount: cancelledCosts?.discount ?? null,
-				dataStorageCost: billCancelled
-					? calculateDataStorageCost(
-							cancelledCosts?.promptTokens ?? estimatedPromptTokens,
-							null,
-							0,
-							null,
-							retentionLevel,
-						)
-					: "0",
-				cached: false,
-				toolResults: null,
-			});
-
+		if (attemptResult.type === "canceled") {
 			return c.json(
 				{
 					error: {
@@ -5382,147 +5176,11 @@ chat.openapi(completions, async (c) => {
 			); // Using 400 status code for client closed request
 		}
 
-		if (res && !res.ok) {
-			// Get the error response text
-			// Body read can throw TimeoutError if the abort signal fires during consumption
-			let errorResponseText: string;
-			try {
-				errorResponseText = await res.text();
-			} catch (bodyError) {
-				if (isTimeoutError(bodyError)) {
-					const errorMessage =
-						bodyError instanceof Error
-							? bodyError.message
-							: "Timeout reading error response body";
-					const bodyErrorCause = extractErrorCause(bodyError);
-					logger.warn("Timeout reading error response body", {
-						usedProvider,
-						usedModel,
-						status: res.status,
-						cause: bodyErrorCause,
-					});
-
-					const bodyTimeoutPluginIds = plugins?.map((p) => p.id) ?? [];
-					const baseLogEntry = createLogEntry(
-						requestId,
-						project,
-						apiKey,
-						providerKey?.id,
-						usedModelFormatted,
-						usedModelMapping!,
-						usedProvider!,
-						initialRequestedModel,
-						requestedProvider,
-						messages,
-						temperature,
-						max_tokens,
-						top_p,
-						frequency_penalty,
-						presence_penalty,
-						reasoning_effort,
-						reasoning_max_tokens,
-						effort,
-						response_format,
-						tools,
-						tool_choice,
-						source,
-						customHeaders,
-						debugMode,
-						userAgent,
-						image_config,
-						routingMetadata,
-						rawBody,
-						null,
-						requestBody,
-						null,
-						bodyTimeoutPluginIds,
-						undefined,
-					);
-
-					await insertLog({
-						...baseLogEntry,
-						duration: Date.now() - perAttemptStartTime,
-						timeToFirstToken: null,
-						timeToFirstReasoningToken: null,
-						responseSize: 0,
-						content: null,
-						reasoningContent: null,
-						finishReason: "upstream_error",
-						promptTokens: null,
-						completionTokens: null,
-						totalTokens: null,
-						reasoningTokens: null,
-						cachedTokens: null,
-						hasError: true,
-						streamed: false,
-						canceled: false,
-						errorDetails: {
-							statusCode: res.status,
-							statusText: "TimeoutError",
-							responseText: errorMessage,
-							cause: bodyErrorCause,
-						},
-						cachedInputCost: null,
-						requestCost: null,
-						webSearchCost: null,
-						imageInputTokens: null,
-						imageOutputTokens: null,
-						imageInputCost: null,
-						imageOutputCost: null,
-						estimatedCost: false,
-						discount: null,
-						dataStorageCost: "0",
-						cached: false,
-						toolResults: null,
-					});
-
-					return c.json(
-						{
-							error: {
-								message: `Upstream provider timeout: ${errorMessage}`,
-								type: "upstream_timeout",
-								param: null,
-								code: "timeout",
-							},
-						},
-						504,
-					);
-				}
-				throw bodyError;
-			}
-
-			// Determine the finish reason first
-			const finishReason = getFinishReasonFromError(
-				res.status,
-				errorResponseText,
-			);
-
-			if (
-				finishReason !== "client_error" &&
-				finishReason !== "content_filter"
-			) {
-				logger.warn("Provider error", {
-					status: res.status,
-					errorText: errorResponseText,
-					usedProvider,
-					requestedProvider,
-					usedModel,
-					initialRequestedModel,
-					organizationId: project.organizationId,
-					projectId: apiKey.projectId,
-					apiKeyId: apiKey.id,
-				});
-			}
-
-			// Log the request in the database
-			// Extract plugin IDs for logging
-			const providerErrorPluginIds = plugins?.map((p) => p.id) ?? [];
-
-			// Check if we should retry before logging so we can mark the log as retried
+		if (attemptResult.type === "http_error") {
 			const willRetryHttpNonStreaming = shouldRetryRequest({
 				requestedProvider,
 				noFallback,
-				statusCode: res.status,
+				statusCode: attemptResult.status,
 				retryCount: retryAttempt,
 				remainingProviders:
 					(routingMetadata?.providerScores.length ?? 0) -
@@ -5530,122 +5188,19 @@ chat.openapi(completions, async (c) => {
 					1,
 				usedProvider,
 			});
-
-			const baseLogEntry = createLogEntry(
-				requestId,
-				project,
-				apiKey,
-				providerKey?.id,
-				usedModelFormatted,
-				usedModelMapping,
-				usedProvider,
-				initialRequestedModel,
-				requestedProvider,
-				messages,
-				temperature,
-				max_tokens,
-				top_p,
-				frequency_penalty,
-				presence_penalty,
-				reasoning_effort,
-				reasoning_max_tokens,
-				effort,
-				response_format,
-				tools,
-				tool_choice,
-				source,
-				customHeaders,
-				debugMode,
-				userAgent,
-				image_config,
-				routingMetadata,
-				rawBody,
-				errorResponseText, // Our formatted error response
-				requestBody, // The request that resulted in error
-				errorResponseText, // Raw upstream error response
-				providerErrorPluginIds,
-				undefined, // No plugin results for error case
-			);
-
-			await insertLog({
-				...baseLogEntry,
-				duration: perAttemptDuration,
-				timeToFirstToken: null, // Not applicable for error case
-				timeToFirstReasoningToken: null, // Not applicable for error case
-				responseSize: errorResponseText.length,
-				content: null,
-				reasoningContent: null,
-				finishReason,
-				promptTokens: null,
-				completionTokens: null,
-				totalTokens: null,
-				reasoningTokens: null,
-				cachedTokens: null,
-				hasError: finishReason !== "content_filter", // content_filter is not an error
-				streamed: false,
-				canceled: false,
-				errorDetails: (() => {
-					// content_filter is not an error, no error details needed
-					if (finishReason === "content_filter") {
-						return null;
-					}
-					// For client errors, try to parse the original error and include the message
-					if (finishReason === "client_error") {
-						try {
-							const originalError = JSON.parse(errorResponseText);
-							return {
-								statusCode: res.status,
-								statusText: res.statusText,
-								responseText: errorResponseText,
-								message: originalError.error?.message ?? errorResponseText,
-							};
-						} catch {
-							// If parsing fails, use default format
-						}
-					}
-					return {
-						statusCode: res.status,
-						statusText: res.statusText,
-						responseText: errorResponseText,
-					};
-				})(),
-				cachedInputCost: null,
-				requestCost: null,
-				webSearchCost: null,
-				imageInputTokens: null,
-				imageOutputTokens: null,
-				imageInputCost: null,
-				imageOutputCost: null,
-				estimatedCost: false,
-				discount: null,
-				dataStorageCost: "0",
-				cached: false,
-				toolResults: null,
-				retried: willRetryHttpNonStreaming,
-				retriedByLogId: willRetryHttpNonStreaming ? finalLogId : null,
-			});
-
-			// Report key health for environment-based tokens
-			// Don't report content_filter as a key error - it's intentional provider behavior
-			if (envVarName !== undefined && finishReason !== "content_filter") {
-				reportKeyError(envVarName, configIndex, res.status, errorResponseText);
-			}
-
 			if (willRetryHttpNonStreaming) {
 				routingAttempts.push({
 					provider: usedProvider,
 					model: usedModel,
-					status_code: res.status,
-					error_type: getErrorType(res.status),
+					status_code: attemptResult.status,
+					error_type: getErrorType(attemptResult.status),
 					succeeded: false,
 				});
 				failedProviderIds.add(usedProvider);
 				continue;
 			}
 
-			// For content_filter, return a proper completion response (not an error)
-			// This handles Azure ResponsibleAIPolicyViolation and similar content filtering errors
-			if (finishReason === "content_filter") {
+			if (attemptResult.finishReason === "content_filter") {
 				return c.json({
 					id: `chatcmpl-${Date.now()}`,
 					object: "chat.completion",
@@ -5676,35 +5231,34 @@ chat.openapi(completions, async (c) => {
 				});
 			}
 
-			// For client errors, return the original provider error response
-			if (finishReason === "client_error") {
+			if (attemptResult.finishReason === "client_error") {
 				try {
-					const originalError = JSON.parse(errorResponseText);
-					return c.json(originalError, res.status as 400);
+					const originalError = JSON.parse(attemptResult.errorText);
+					return c.json(originalError, attemptResult.status as 400);
 				} catch {
-					// If we can't parse the original error, fall back to our format
+					// Fall through to wrapped error response.
 				}
 			}
 
-			// Return our wrapped error response for non-client errors
 			return c.json(
 				{
 					error: {
-						message: `Error from provider: ${res.status} ${res.statusText} ${errorResponseText}`,
-						type: finishReason,
+						message: `Error from provider: ${attemptResult.status} ${attemptResult.statusText} ${attemptResult.errorText}`,
+						type: attemptResult.finishReason,
 						param: null,
-						code: finishReason,
+						code: attemptResult.finishReason,
 						requestedProvider,
 						usedProvider,
 						requestedModel: initialRequestedModel,
 						usedModel,
-						responseText: errorResponseText,
+						responseText: attemptResult.errorText,
 					},
 				},
 				500,
 			);
 		}
 
+		res = attemptResult.response;
 		break; // Fetch succeeded, exit retry loop
 	} // End of retry for loop
 
@@ -5764,8 +5318,58 @@ chat.openapi(completions, async (c) => {
 	}
 
 	let json: any;
+	let responseSize = 0;
+	let content: string | null = null;
+	let reasoningContent: string | null = null;
+	let finishReason: string | null = null;
+	let promptTokens: number | null = null;
+	let completionTokens: number | null = null;
+	let totalTokens: number | string | null = null;
+	let reasoningTokens: number | null = null;
+	let cachedTokens: number | null = null;
+	let toolResults: any = null;
+	let convertedImages: any[] = [];
+	let annotations: any[] | null = null;
+	let calculatedPromptTokens: number | null = null;
+	let calculatedCompletionTokens: number | null = null;
+	let calculatedReasoningTokens: number | null = null;
+	let costs: Awaited<ReturnType<typeof calculateCosts>>;
+	let pluginResults: {
+		responseHealing?: {
+			healed: boolean;
+			healingMethod?: string;
+		};
+	} = {};
 	try {
-		json = await res.json();
+		const processedResponse = await processNonStreamingProviderResponse({
+			response: res,
+			usedProvider,
+			usedModel,
+			messages: messages as BaseMessage[],
+			responseFormat: response_format,
+			responseHealingEnabled: plugins?.some((p) => p.id === "response-healing"),
+			inputImageCount,
+			imageSize: image_config?.image_size,
+			organizationId: project.organizationId,
+		});
+		json = processedResponse.json;
+		responseSize = processedResponse.responseSize;
+		content = processedResponse.content;
+		reasoningContent = processedResponse.reasoningContent;
+		finishReason = processedResponse.finishReason;
+		promptTokens = processedResponse.promptTokens;
+		completionTokens = processedResponse.completionTokens;
+		totalTokens = processedResponse.totalTokens;
+		reasoningTokens = processedResponse.reasoningTokens;
+		cachedTokens = processedResponse.cachedTokens;
+		toolResults = processedResponse.toolResults;
+		convertedImages = processedResponse.convertedImages;
+		annotations = processedResponse.annotations;
+		calculatedPromptTokens = processedResponse.calculatedPromptTokens;
+		calculatedCompletionTokens = processedResponse.calculatedCompletionTokens;
+		calculatedReasoningTokens = processedResponse.calculatedReasoningTokens;
+		costs = processedResponse.costs;
+		pluginResults = processedResponse.pluginResults;
 	} catch (bodyError) {
 		if (isTimeoutError(bodyError)) {
 			const errorMessage =
@@ -5871,64 +5475,6 @@ chat.openapi(completions, async (c) => {
 	if (process.env.NODE_ENV !== "production") {
 		logger.debug("API response", { response: json });
 	}
-	// Track response size - prefer Content-Length header to avoid expensive stringify on large responses
-	const contentLengthHeader = res.headers.get("Content-Length");
-	let responseSize = contentLengthHeader
-		? parseInt(contentLengthHeader, 10)
-		: 0;
-
-	// Extract content and token usage based on provider
-	const parsedResponse = parseProviderResponse(
-		usedProvider,
-		usedModel,
-		json,
-		messages,
-	);
-	let { content, totalTokens } = parsedResponse;
-	const {
-		reasoningContent,
-		finishReason,
-		promptTokens,
-		completionTokens,
-		reasoningTokens,
-		cachedTokens,
-		toolResults,
-		images,
-		annotations,
-		webSearchCount,
-	} = parsedResponse;
-
-	// Apply response healing if enabled and response_format is json_object or json_schema
-	const responseHealingEnabled = plugins?.some(
-		(p) => p.id === "response-healing",
-	);
-	const isJsonResponseFormat =
-		response_format?.type === "json_object" ||
-		response_format?.type === "json_schema";
-
-	// Track plugin results for logging
-	const pluginResults: {
-		responseHealing?: {
-			healed: boolean;
-			healingMethod?: string;
-		};
-	} = {};
-
-	if (responseHealingEnabled && isJsonResponseFormat && content) {
-		const healingResult = healJsonResponse(content);
-		pluginResults.responseHealing = {
-			healed: healingResult.healed,
-			healingMethod: healingResult.healingMethod,
-		};
-		if (healingResult.healed) {
-			logger.debug("Response healing applied", {
-				method: healingResult.healingMethod,
-				originalLength: healingResult.originalContent.length,
-				healedLength: healingResult.content.length,
-			});
-			content = healingResult.content;
-		}
-	}
 
 	// Enhanced logging for Google models to debug missing responses
 	if (
@@ -5953,81 +5499,11 @@ chat.openapi(completions, async (c) => {
 	}
 
 	// Debug: Log images found in response
-	logger.debug("Gateway - parseProviderResponse extracted images", { images });
+	logger.debug("Gateway - parseProviderResponse extracted images", {
+		images: convertedImages,
+	});
 	logger.debug("Gateway - Used provider", { usedProvider });
 	logger.debug("Gateway - Used model", { usedModel });
-
-	// Convert external image URLs to base64 data URLs
-	// This ensures consistent response format across all providers
-	// The conversion function checks if already in data: format and skips if so
-	let convertedImages = images;
-	if (images && images.length > 0) {
-		convertedImages = await convertImagesToBase64(images);
-		logger.debug("Gateway - Converted images to base64", {
-			provider: usedProvider,
-			originalCount: images.length,
-			convertedCount: convertedImages.length,
-		});
-	}
-
-	// Estimate tokens if not provided by the API
-	const estimatedTokens = estimateTokens(
-		usedProvider,
-		messages,
-		content,
-		promptTokens,
-		completionTokens,
-	);
-	let calculatedPromptTokens = estimatedTokens.calculatedPromptTokens;
-	const calculatedCompletionTokens = estimatedTokens.calculatedCompletionTokens;
-
-	// Estimate reasoning tokens if not provided but reasoning content exists
-	let calculatedReasoningTokens = reasoningTokens;
-	if (!reasoningTokens && reasoningContent) {
-		try {
-			calculatedReasoningTokens = encode(reasoningContent).length;
-		} catch (error) {
-			// Fallback to simple estimation if encoding fails
-			logger.error(
-				"Failed to encode reasoning text",
-				error instanceof Error ? error : new Error(String(error)),
-			);
-			calculatedReasoningTokens = estimateTokensFromContent(reasoningContent);
-		}
-	}
-	const costs = await calculateCosts(
-		usedModel,
-		usedProvider,
-		calculatedPromptTokens,
-		calculatedCompletionTokens,
-		cachedTokens,
-		{
-			prompt: messages.map((m) => messageContentToString(m.content)).join("\n"),
-			completion: content,
-			toolResults: toolResults,
-		},
-		reasoningTokens,
-		convertedImages?.length || 0,
-		image_config?.image_size,
-		inputImageCount,
-		webSearchCount,
-		project.organizationId,
-	);
-
-	// Use costs.promptTokens as canonical value (includes image input
-	// tokens for providers that exclude them from upstream usage)
-	if (costs.promptTokens !== null && costs.promptTokens !== undefined) {
-		const promptDelta =
-			(costs.promptTokens ?? 0) - (calculatedPromptTokens ?? 0);
-		if (promptDelta > 0) {
-			calculatedPromptTokens = costs.promptTokens;
-			totalTokens = (
-				(calculatedPromptTokens ?? 0) +
-				(calculatedCompletionTokens ?? 0) +
-				(calculatedReasoningTokens ?? 0)
-			).toString();
-		}
-	}
 
 	// Transform response to OpenAI format for non-OpenAI providers
 	// Include costs in response for all users
@@ -6171,7 +5647,9 @@ chat.openapi(completions, async (c) => {
 		promptTokens: calculatedPromptTokens?.toString() ?? null,
 		completionTokens: calculatedCompletionTokens?.toString() ?? null,
 		totalTokens:
-			totalTokens ??
+			(typeof totalTokens === "string"
+				? totalTokens
+				: totalTokens?.toString()) ??
 			(
 				(calculatedPromptTokens ?? 0) + (calculatedCompletionTokens ?? 0)
 			).toString(),

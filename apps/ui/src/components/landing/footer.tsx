@@ -10,6 +10,7 @@ import { XIcon } from "@/lib/icons/XIcon";
 import { providers as providerDefinitions } from "@llmgateway/models";
 
 export default function Footer() {
+	return <footer></footer>;
 	const config = useAppConfig();
 	const filteredProviders = providerDefinitions.filter(
 		(p) => p.name !== "LLM Gateway",

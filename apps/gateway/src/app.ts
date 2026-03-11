@@ -24,7 +24,8 @@ import { imagesRoute } from "./images/route.js";
 import { mcpHandler, registerMcpOAuthRoutes } from "./mcp/mcp.js";
 import { tracingMiddleware } from "./middleware/tracing.js";
 import { models } from "./models/route.js";
-import { responses } from "./responses/responses.js";
+import { responsesRoute } from "./responses/route.js";
+import { videos } from "./videos/videos.js";
 
 import type { ServerTypes } from "./vars.js";
 
@@ -313,7 +314,8 @@ v1.route("/chat", chat);
 v1.route("/images", imagesRoute);
 v1.route("/models", models);
 v1.route("/messages", anthropic);
-v1.route("/responses", responses);
+v1.route("/responses", responsesRoute);
+v1.route("/videos", videos);
 
 app.route("/v1", v1);
 

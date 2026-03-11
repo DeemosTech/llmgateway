@@ -198,6 +198,19 @@ export interface ProviderModelMapping {
 	 * When true, requests are routed to a provider-specific image generation endpoint.
 	 */
 	imageGenerations?: boolean;
+	/**
+	 * Whether this model uses a dedicated video generation API.
+	 * When true, requests are routed to a provider-specific video generation endpoint.
+	 */
+	videoGenerations?: boolean;
+	/**
+	 * Video generation pricing in USD per second.
+	 */
+	videoPricePerSecond?: number;
+	/**
+	 * Video generation pricing in USD per second when audio is enabled.
+	 */
+	videoPricePerSecondWithAudio?: number;
 }
 
 export type StabilityLevel = "stable" | "beta" | "unstable" | "experimental";
@@ -237,7 +250,7 @@ export interface ModelDefinition {
 	/**
 	 * Output formats supported by the model (defaults to ['text'] if not specified)
 	 */
-	output?: ("text" | "image")[];
+	output?: ("text" | "image" | "video")[];
 	/**
 	 * Whether this model requires an image input to function (e.g. image editing models).
 	 */
