@@ -685,6 +685,30 @@ export const anthropicModels = [
 		],
 	},
 	{
+		id: "claude-3-haiku-20240307",
+		name: "Claude 3 Haiku (2024-03-07)",
+		description:
+			"Compact Claude 3 model with vision for fast, affordable inference.",
+		family: "anthropic",
+		releasedAt: new Date("2024-03-04"),
+		providers: [
+			{
+				providerId: "anthropic",
+				modelName: "claude-3-haiku-20240307",
+				inputPrice: 0.25 / 1e6,
+				outputPrice: 1.25 / 1e6,
+				cachedInputPrice: 0.03 / 1e6,
+				minCacheableTokens: 2048,
+				requestPrice: 0,
+				contextSize: 200000,
+				maxOutput: 4096,
+				streaming: true,
+				vision: true,
+				tools: true,
+			},
+		],
+	},
+	{
 		id: "claude-opus-4-5-20251101",
 		name: "Claude Opus 4.5",
 		description:
