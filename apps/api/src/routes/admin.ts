@@ -15,6 +15,7 @@ import {
 	inArray,
 	isNull,
 	lt,
+	lte,
 	ne,
 	or,
 	sql,
@@ -2638,21 +2639,21 @@ admin.openapi(getModelStats, async (c) => {
 		const [statsRows, modelRows, providerCountRows] = await Promise.all([
 			db
 				.select({
-					usedModel: projectHourlyModelStats.usedModel,
-					logsCount: sql<number>`SUM(${projectHourlyModelStats.requestCount})`,
-					errorsCount: sql<number>`SUM(${projectHourlyModelStats.errorCount})`,
-					cachedCount: sql<number>`SUM(${projectHourlyModelStats.cacheCount})`,
-					totalTokens: sql<number>`SUM(CAST(${projectHourlyModelStats.totalTokens} AS NUMERIC))`,
-					totalCost: sql<number>`SUM(${projectHourlyModelStats.cost})`,
+					modelId: modelHistory.modelId,
+					logsCount: sql<number>`SUM(${modelHistory.logsCount})`,
+					errorsCount: sql<number>`SUM(${modelHistory.errorsCount})`,
+					cachedCount: sql<number>`SUM(${modelHistory.cachedCount})`,
+					totalTokens: sql<number>`SUM(CAST(${modelHistory.totalTokens} AS NUMERIC))`,
+					totalCost: sql<number>`SUM(${modelHistory.totalCost})`,
 				})
-				.from(projectHourlyModelStats)
+				.from(modelHistory)
 				.where(
 					and(
-						gte(projectHourlyModelStats.hourTimestamp, startDate),
-						lt(projectHourlyModelStats.hourTimestamp, endDateExclusive),
+						gte(modelHistory.minuteTimestamp, startDate),
+						lt(modelHistory.minuteTimestamp, endDateExclusive),
 					),
 				)
-				.groupBy(projectHourlyModelStats.usedModel),
+				.groupBy(modelHistory.modelId),
 			db
 				.select({
 					id: tables.model.id,
@@ -2677,7 +2678,7 @@ admin.openapi(getModelStats, async (c) => {
 
 		const statsMap = new Map(
 			statsRows.map((r) => [
-				r.usedModel,
+				r.modelId,
 				{
 					logsCount: Number(r.logsCount ?? 0),
 					errorsCount: Number(r.errorsCount ?? 0),
@@ -2886,20 +2887,23 @@ admin.openapi(getModelDetail, async (c) => {
 			.where(eq(tables.modelProviderMapping.modelId, modelId)),
 		db
 			.select({
-				usedProvider: projectHourlyModelStats.usedProvider,
-				logsCount: sql<number>`SUM(${projectHourlyModelStats.requestCount})`.as(
-					"logs_count",
-				),
-				errorsCount: sql<number>`SUM(${projectHourlyModelStats.errorCount})`.as(
-					"errors_count",
-				),
-				cachedCount: sql<number>`SUM(${projectHourlyModelStats.cacheCount})`.as(
-					"cached_count",
-				),
+				providerId: modelProviderMappingHistory.providerId,
+				logsCount:
+					sql<number>`SUM(${modelProviderMappingHistory.logsCount})`.as(
+						"logs_count",
+					),
+				errorsCount:
+					sql<number>`SUM(${modelProviderMappingHistory.errorsCount})`.as(
+						"errors_count",
+					),
+				cachedCount:
+					sql<number>`SUM(${modelProviderMappingHistory.cachedCount})`.as(
+						"cached_count",
+					),
 			})
-			.from(projectHourlyModelStats)
-			.where(eq(projectHourlyModelStats.usedModel, modelId))
-			.groupBy(projectHourlyModelStats.usedProvider),
+			.from(modelProviderMappingHistory)
+			.where(eq(modelProviderMappingHistory.modelId, modelId))
+			.groupBy(modelProviderMappingHistory.providerId),
 	]);
 
 	const providerIds = mappings.map((m) => m.providerId);
@@ -2913,7 +2917,7 @@ admin.openapi(getModelDetail, async (c) => {
 	const providerNameMap = new Map(providerRows.map((p) => [p.id, p.name]));
 	const providerStatsMap = new Map(
 		statsRows.map((r) => [
-			r.usedProvider,
+			r.providerId,
 			{
 				logsCount: Number(r.logsCount ?? 0),
 				errorsCount: Number(r.errorsCount ?? 0),
@@ -3556,6 +3560,8 @@ const getGlobalCostByModel = createRoute({
 	request: {
 		query: z.object({
 			window: tokenWindowSchema.default("7d").optional(),
+			from: z.string().optional(),
+			to: z.string().optional(),
 		}),
 	},
 	responses: {
@@ -3573,7 +3579,17 @@ const getGlobalCostByModel = createRoute({
 admin.openapi(getGlobalCostByModel, async (c) => {
 	const query = c.req.valid("query");
 	const window = query.window ?? "7d";
-	const startDate = getTokenWindowStartDate(window);
+
+	let startDate: Date;
+	let endDate: Date | undefined;
+	if (query.from && query.to) {
+		startDate = new Date(query.from + "T00:00:00");
+		startDate.setUTCHours(0, 0, 0, 0);
+		endDate = new Date(query.to + "T00:00:00");
+		endDate.setUTCHours(23, 59, 59, 999);
+	} else {
+		startDate = getTokenWindowStartDate(window);
+	}
 
 	const rows = await db
 		.select({
@@ -3589,7 +3605,14 @@ admin.openapi(getGlobalCostByModel, async (c) => {
 				),
 		})
 		.from(projectHourlyModelStats)
-		.where(gte(projectHourlyModelStats.hourTimestamp, startDate))
+		.where(
+			endDate
+				? and(
+						gte(projectHourlyModelStats.hourTimestamp, startDate),
+						lte(projectHourlyModelStats.hourTimestamp, endDate),
+					)
+				: gte(projectHourlyModelStats.hourTimestamp, startDate),
+		)
 		.groupBy(projectHourlyModelStats.usedModel)
 		.orderBy(desc(sql`SUM(${projectHourlyModelStats.cost})`))
 		.limit(20);
